@@ -1,0 +1,26 @@
+# Render Blueprint: render.com -> New -> Blueprint -> select this repo.
+# Secrets (sync: false) are asked for in the dashboard; never committed.
+services:
+  - type: web
+    name: weather-risk-agent
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        sync: false          # e.g. claude-sonnet-5-5
+      - key: ACCESS_CODE
+        sync: false          # required on /chat, /refresh, /alerts/check
+      - key: LLM_EFFORT
+        value: medium
+      - key: ALERT_SCHEDULE_HOURS
+        value: "6"
+      - key: ALERT_WEBHOOK_URL
+        sync: false          # optional
+      - key: CHAT_RATE_LIMIT
+        value: "20"
+      - key: NWS_USER_AGENT
+        value: weather-risk-agent (demo)

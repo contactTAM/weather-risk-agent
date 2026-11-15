@@ -49,3 +49,26 @@ def test_startup_fails_without_model(seeded, monkeypatch):  # noqa: F811
     with pytest.raises(RuntimeError, match="LLM_MODEL"):
         with TestClient(api.app):
             pass
+
+
+def test_access_code_guards_costly_endpoints(client, monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "s3cret")
+    assert client.post("/chat", json={"session_id": "t", "message": "hi"}).status_code == 401
+    assert client.post("/alerts/check").status_code == 401
+    assert client.post("/refresh").status_code == 401
+    assert client.get("/scores").status_code == 200           # read-only stays public
+    assert client.get("/health").json()["access_code_required"] is True
+
+
+def test_chat_rate_limit(client, monkeypatch):
+    from app import agent as agent_mod
+    monkeypatch.setenv("CHAT_RATE_LIMIT", "2")
+    api._hits.clear()
+    monkeypatch.setattr(agent_mod, "chat", lambda s, m: AgentAnswer(
+        in_scope=False, answer="out of scope answer", hubs=[], focus_hazard="composite", reasoning_steps=[],
+        data_used=[], assumptions=[], uncertainty=Uncertainty(level="low", note=""), follow_up_suggestions=[],
+        meta=ChatMeta(session_id=s)))
+    codes = [client.post("/chat", json={"session_id": "t", "message": "x"},
+                         headers={"x-forwarded-for": "9.9.9.9"}).status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
+    api._hits.clear()

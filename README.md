@@ -42,7 +42,7 @@ You can also click a hub on the network board to ask why it scores where it does
 | What | Command |
 |---|---|
 | Run the API and UI | `uv run uvicorn app.api:app --port 8000` |
-| Unit tests (45, no network, no LLM) | `uv run pytest` |
+| Unit tests (47, no network, no LLM) | `uv run pytest` |
 | Evaluation set (14 cases, live LLM, about $0.50–1 per run) | `uv run python -m evals.run` |
 | Evals for some cases only, or against a running server | `uv run python -m evals.run --case dallas_why --api http://localhost:8000` |
 | Refresh public data | `uv run python -m app.data.refresh [--force] [--hub DEN]` |
@@ -71,11 +71,25 @@ A `/chat` response has these fields: `in_scope`, `answer`, `hubs[{hub_id, city, 
 | `LLM_EFFORT` | `medium` | Model effort level |
 | `LLM_FALLBACKS` | `default` | Server-side refusal fallback; `off` disables it |
 | `DB_PATH` | `data/cache.sqlite` | SQLite file |
+| `ACCESS_CODE` | (none) | When set, required on `/chat`, `/refresh` and `/alerts/check` (public deploys) |
+| `CHAT_RATE_LIMIT` / `CHAT_RATE_WINDOW_S` | `20` / `600` | `/chat` requests per IP per window; `0` disables |
 | `ALERT_WEBHOOK_URL` | (none) | Where alert JSON is POSTed (try `http://localhost:8000/alerts/echo`) |
 | `ALERT_SCHEDULE_HOURS` | `6` | Alert job interval; `0` disables it |
 | `ALERT_SCORE_DELTA` | `5` | Score change, in points, that triggers an alert (a level change always does) |
 | `SCORING_CONFIG` | `config/scoring.yaml` | Alternative weights and anchors for what-if runs |
 | `NWS_USER_AGENT` | `weather-risk-agent (demo)` | The NWS API requires a User-Agent |
+
+## Deploy (Render, free tier)
+
+The repo includes a `Dockerfile` and a `render.yaml` blueprint.
+
+1. On render.com, choose **New → Blueprint**, select this repo, then **Apply**.
+2. Enter the secrets it asks for: `ANTHROPIC_API_KEY`, `LLM_MODEL`, `ACCESS_CODE`, and optionally `ALERT_WEBHOOK_URL`.
+3. Open the service URL. The UI asks for the access code on the first question.
+
+Protection for a public URL: `/chat`, `/refresh` and `/alerts/check` require the `X-Access-Code` header when `ACCESS_CODE` is set, and `/chat` is rate-limited per visitor (`CHAT_RATE_LIMIT`, default 20 per 10 minutes). Read-only endpoints stay public. The free tier sleeps when idle, so open the URL about a minute before a demo. The disk is ephemeral; the data seed is restored on every start.
+
+Locally with Docker: `docker build -t weather-risk-agent . && docker run -p 8000:8000 --env-file .env weather-risk-agent`
 
 ## Repository layout
 

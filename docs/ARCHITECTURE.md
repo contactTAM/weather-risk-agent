@@ -139,7 +139,7 @@ All of it lives in `app/scoring.py` as pure functions, configured in `config/sco
 - **Every check is deterministic** (no LLM-as-judge): schema valid with no error, in/out of scope, tools called, hub order, expected numbers present in the answer within a tolerance, required wording, no grounding warnings, assumptions present. The checker itself is unit-tested.
 - **Results across three runs during development:** 14/14, then 13/14, then 14/14. The failure in run 2 was a wrong expectation: the agent offered in-network alternatives for Seattle, which the system prompt asks for. The check was changed to test the real risk, inventing numbers for an unknown hub. Run 1's schema retries led to a real fix (`list_hubs` now cites its source). See `evals/sample_results.json`.
 
-`uv run pytest` runs **45 unit tests** with no network and no LLM: scoring and metrics on synthetic data, fetchers with mocked HTTP, tools, the agent loop with a fake LLM client (tool loop, retry path, double failure, refusal, memory, grounding), the API and alerts.
+`uv run pytest` runs **47 unit tests** with no network and no LLM: scoring and metrics on synthetic data, fetchers with mocked HTTP, tools, the agent loop with a fake LLM client (tool loop, retry path, double failure, refusal, memory, grounding), the API and alerts.
 
 ## 8. Alerts (bonus)
 
@@ -151,14 +151,18 @@ All of it lives in `app/scoring.py` as pure functions, configured in `config/sco
 
 The historical scores move only when data is refreshed, the window rolls over, FEMA updates, or the config changes, so the NWS alert is the frequent live signal. In the live demo, the baseline run caught a real **Freeze Warning at Atlanta**, and a heat-weighted what-if config fired 7 score-change alerts, including Phoenix moving from low to moderate.
 
-## 9. Assumptions
+## 9. Deployment
+
+The app is one Docker image (`Dockerfile`) deployed as a Render web service from `render.yaml`; it's stateless apart from the SQLite file, which the seed restores on start. A public URL would otherwise spend the owner's LLM credits, so the endpoints that cost money or change state (`/chat`, `/refresh`, `/alerts/check`) require an `X-Access-Code` when `ACCESS_CODE` is set (constant-time comparison), and `/chat` has a per-IP sliding-window rate limit. Read-only endpoints stay public. Chat memory and alert snapshots live on the instance's ephemeral disk, which is acceptable for a demo; production would use a managed Postgres.
+
+## 10. Assumptions
 
 - The hub network is fictional: real cities, with city-centre coordinates standing in for hub sites.
 - "Last year" means calendar year 2025, the last full year. Scores use a 2021–2025 baseline, so one odd year doesn't dominate.
 - "Had snowfall" means ≥ 0.1 cm (any measurable snowfall). The winter score uses ≥ 1 cm days. The stat tool returns both, and the agent says which one it used.
 - FEMA declarations measure impact and the declaration process, not weather alone. They serve as a long-term signal alongside the weather counts.
 
-## 10. Limitations and uncertainty
+## 11. Limitations and uncertainty
 
 - **Reanalysis is not station data.** Grid cells smooth local extremes, and peak gusts are clearly under-counted (Miami: 0.2 days a year ≥ 90 km/h). So the hurricane signal leans on FEMA.
 - **Five years is a short window for rare events,** and FEMA counts are small integers. Small score differences are not meaningful, which is why close calls are flagged.
@@ -166,7 +170,7 @@ The historical scores move only when data is refreshed, the window rolls over, F
 - **Exposure is not the same as risk to the business.** The scores don't capture vulnerability (building, backup power, routing alternatives) or the value of each hub.
 - The LLM's wording can vary between runs; the numbers and the hub table cannot.
 
-## 11. What I'd do next
+## 12. What I'd do next
 
 1. Validate the weights against real disruption data (carrier delay records, the company's own outage logs) and fit them, instead of judging them.
 2. Add vulnerability and criticality per hub (volume, alternatives), so the score becomes *risk = hazard × exposure × vulnerability*, which is closer to an investment decision.

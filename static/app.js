@@ -93,8 +93,15 @@ async function ask(text) {
   wait.className = "thinking"; wait.textContent = "checking the data";
   log.appendChild(wait); wait.scrollIntoView({ behavior: "smooth" });
   try {
-    const r = await fetch("/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+    const send = () => fetch("/chat", { method: "POST",
+      headers: { "Content-Type": "application/json", "X-Access-Code": store.get("wra-code") || "" },
       body: JSON.stringify({ session_id: sessionId, message: text }) });
+    let r = await send();
+    if (r.status === 401) {  // public deploy: ask for the access code once, then retry
+      const code = window.prompt("This demo is protected. Enter the access code:");
+      if (code) { store.set("wra-code", code.trim()); r = await send(); }
+    }
+    if (r.status === 429) throw new Error((await r.json()).detail);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     renderAgent(await r.json());
   } catch (e) {

@@ -1,11 +1,15 @@
 """FastAPI app. The chat UI (static/) talks only to these endpoints."""
 from __future__ import annotations
 
+import hmac
+import os
 import threading
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -33,6 +37,34 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Weather Risk Intelligence Agent", version="0.1.0", lifespan=lifespan)
 
 
+# ---------- protection for a public deploy (off when ACCESS_CODE is unset, e.g. locally) ----------
+def require_access(request: Request) -> None:
+    """Endpoints that spend LLM credits or change state need X-Access-Code when ACCESS_CODE is set."""
+    code = os.getenv("ACCESS_CODE", "")
+    if code and not hmac.compare_digest(request.headers.get("x-access-code", ""), code):
+        raise HTTPException(401, "Access code required")
+
+
+_hits: dict[str, deque] = defaultdict(deque)
+
+
+def rate_limit(request: Request) -> None:
+    """Simple in-memory sliding window per client IP (single instance is enough here)."""
+    limit = int(os.getenv("CHAT_RATE_LIMIT", "20"))
+    window = int(os.getenv("CHAT_RATE_WINDOW_S", "600"))
+    if limit <= 0:
+        return
+    ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+          or (request.client.host if request.client else "unknown"))
+    now = time.monotonic()
+    q = _hits[ip]
+    while q and now - q[0] > window:
+        q.popleft()
+    if len(q) >= limit:
+        raise HTTPException(429, f"Rate limit: {limit} questions per {window // 60} minutes. Try again later.")
+    q.append(now)
+
+
 @app.get("/health")
 def health() -> dict:
     with connect() as c:
@@ -42,10 +74,10 @@ def health() -> dict:
     return {"status": "ok" if hubs_with_data == len(load_hubs()) else "degraded",
             "hubs_configured": len(load_hubs()), "hubs_with_weather": hubs_with_data,
             "daily_rows": days, "weather_fetched_at": fetched, "model": llm_model(),
-            "refresh_running": _refresh_state["running"]}
+            "refresh_running": _refresh_state["running"], "access_code_required": bool(os.getenv("ACCESS_CODE"))}
 
 
-@app.post("/chat", response_model=AgentAnswer)
+@app.post("/chat", response_model=AgentAnswer, dependencies=[Depends(require_access), Depends(rate_limit)])
 def chat(req: ChatRequest) -> AgentAnswer:  # sync def -> FastAPI runs it in a threadpool
     return agent.chat(req.session_id, req.message)
 
@@ -93,7 +125,7 @@ def _do_refresh(force: bool) -> None:
             _refresh_state["running"] = False
 
 
-@app.post("/refresh", status_code=202)
+@app.post("/refresh", status_code=202, dependencies=[Depends(require_access)])
 def post_refresh(background: BackgroundTasks, force: bool = False) -> dict:
     if _refresh_state["running"]:
         return {"status": "already_running"}
@@ -106,7 +138,7 @@ def get_refresh() -> dict:
     return _refresh_state
 
 
-@app.post("/alerts/check")
+@app.post("/alerts/check", dependencies=[Depends(require_access)])
 def alerts_check(dry_run: bool = False) -> dict:
     from app import alerts
     return alerts.check(dry_run=dry_run)
