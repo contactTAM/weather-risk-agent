@@ -15,12 +15,10 @@ from fastapi.staticfiles import StaticFiles
 
 from app import agent, tools
 from app.config import ROOT, llm_model, load_hubs
-from app.data.refresh import refresh
 from app.db import connect
 from app.schemas import AgentAnswer, ChatRequest
 
-_refresh_lock = threading.Lock()
-_refresh_state: dict = {"running": False, "last_report": None}
+_run_state: dict = {"running": False, "last": None}
 
 
 @asynccontextmanager
@@ -28,6 +26,9 @@ async def lifespan(app: FastAPI):
     llm_model()  # fail fast with a clear message if LLM_MODEL is not configured
     from app.data.seed import ensure_db
     ensure_db()  # fresh clone / cloud deploy: restore the shipped data snapshot
+    from app.data import refresh as refresh_mod
+    if refresh_mod.window_changed():  # e.g. cold start after the January roll: fetch the new window
+        threading.Thread(target=refresh_mod.refresh, daemon=True, name="startup-refresh").start()
     from app import alerts
     alerts.start_scheduler()
     yield
@@ -74,7 +75,7 @@ def health() -> dict:
     return {"status": "ok" if hubs_with_data == len(load_hubs()) else "degraded",
             "hubs_configured": len(load_hubs()), "hubs_with_weather": hubs_with_data,
             "daily_rows": days, "weather_fetched_at": fetched, "model": llm_model(),
-            "refresh_running": _refresh_state["running"], "access_code_required": bool(os.getenv("ACCESS_CODE")),
+            "refresh_running": __import__("app.data.refresh", fromlist=["x"]).is_running(), "access_code_required": bool(os.getenv("ACCESS_CODE")),
             "commit": (os.getenv("RENDER_GIT_COMMIT") or "")[:7] or None,
             "state_backend": __import__("app.state", fromlist=["x"]).backend_name()}
 
@@ -117,33 +118,67 @@ def hub_alerts(hub_id: str) -> dict:
     return out
 
 
-def _do_refresh(force: bool) -> None:
-    with _refresh_lock:
-        _refresh_state["running"] = True
-        try:
-            _refresh_state["last_report"] = refresh(force=force)
-            tools.invalidate_scores()
-        finally:
-            _refresh_state["running"] = False
-
-
 @app.post("/refresh", status_code=202, dependencies=[Depends(require_access)])
 def post_refresh(background: BackgroundTasks, force: bool = False) -> dict:
-    if _refresh_state["running"]:
+    from app.data import refresh as refresh_mod
+    if refresh_mod.is_running():
         return {"status": "already_running"}
-    background.add_task(_do_refresh, force)
-    return {"status": "started", "force": force, "note": "Poll GET /refresh for the report."}
+    background.add_task(refresh_mod.refresh, None, force)
+    return {"status": "started", "force": force, "note": "Poll GET /refresh until running is false."}
 
 
 @app.get("/refresh")
 def get_refresh() -> dict:
-    return _refresh_state
+    from app.data import refresh as refresh_mod
+    return {"running": refresh_mod.is_running(), "last": refresh_mod.last_result(),
+            "last_successful_refresh": refresh_mod.last_successful_refresh()}
 
 
 @app.post("/alerts/check", dependencies=[Depends(require_access)])
 def alerts_check(dry_run: bool = False) -> dict:
+    """Compare current scores with the durable snapshot. 409 if the local data isn't fresh."""
     from app import alerts
-    return alerts.check(dry_run=dry_run)
+    try:
+        return alerts.check(dry_run=dry_run)
+    except alerts.DataNotFresh as e:
+        raise HTTPException(409, str(e))
+
+
+def _run_refresh_then_check(force: bool) -> None:
+    from app import alerts
+    _run_state["running"] = True
+    try:
+        _run_state["last"] = alerts.refresh_then_check(force=force)
+    finally:
+        _run_state["running"] = False
+
+
+@app.post("/alerts/run", status_code=202, dependencies=[Depends(require_access)])
+def alerts_run(background: BackgroundTasks, force: bool = False) -> dict:
+    """Refresh, then compare, in the background (one call). Poll GET /alerts/run."""
+    if _run_state["running"]:
+        return {"status": "already_running"}
+    background.add_task(_run_refresh_then_check, force)
+    return {"status": "started"}
+
+
+@app.get("/alerts/run")
+def alerts_run_status() -> dict:
+    return _run_state
+
+
+@app.get("/alerts/status")
+def alerts_status() -> dict:
+    """Durable state + data freshness, for monitoring and for checking that state survives restarts."""
+    from app import alerts, state
+    from app.config import analysis_window
+    from app.data import refresh as refresh_mod
+    age = refresh_mod.data_age_hours()
+    return {**state.status(), "window": analysis_window().label,
+            "last_successful_refresh": refresh_mod.last_successful_refresh(),
+            "data_age_hours": round(age, 2) if age is not None else None,
+            "data_fresh": age is not None and age <= alerts.max_data_age_hours(),
+            "refresh_running": refresh_mod.is_running()}
 
 
 @app.get("/alerts")

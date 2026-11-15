@@ -15,6 +15,7 @@ import json
 import os
 import sqlite3
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Iterator
 
 from app.config import db_path
@@ -108,7 +109,8 @@ def connect() -> Iterator[_Conn]:
         finally:
             raw.close()
     else:
-        path = db_path()
+        # STATE_DB_PATH (optional) keeps SQLite state in its own file, e.g. to simulate a restart in tests
+        path = Path(os.environ["STATE_DB_PATH"]) if os.getenv("STATE_DB_PATH") else db_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         raw = sqlite3.connect(path)
         raw.row_factory = sqlite3.Row

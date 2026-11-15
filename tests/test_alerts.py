@@ -7,6 +7,13 @@ from app import alerts, tools
 from tests.test_tools import seeded  # noqa: F401
 
 
+def _mark_fresh():
+    """These tests are about the diff logic: record a successful refresh so the freshness guard passes."""
+    from app.data.refresh import record_refresh
+    from app.db import now_iso
+    record_refresh(now_iso(), now_iso(), True, "2021-2025", [])
+
+
 def test_score_changes_diff():
     prev = {("A", "heat"): (30.0, "low"), ("B", "heat"): (50.0, "moderate"), ("C", "heat"): (40.0, "moderate")}
     cur = {("A", "heat"): (34.0, "moderate"), ("B", "heat"): (56.0, "moderate"), ("C", "heat"): (41.0, "moderate"),
@@ -23,6 +30,7 @@ def test_check_baseline_then_change_then_webhook(seeded, monkeypatch, tmp_path):
     sev = {"id": "urn:nws:1", "event": "Hurricane Warning", "severity": "Extreme"}
     monkeypatch.setattr(alerts.nws, "active_alerts", lambda h: {"alerts": [sev] if h.id == "MIA" else []})
 
+    _mark_fresh()
     first = alerts.check()
     assert first["baseline"] and first["score_changes"] == 0 and first["nws_alerts"] == 1
 
@@ -42,6 +50,7 @@ def test_check_baseline_then_change_then_webhook(seeded, monkeypatch, tmp_path):
 
 def test_dry_run_writes_nothing(seeded, monkeypatch):  # noqa: F811
     monkeypatch.setattr(alerts.nws, "active_alerts", lambda h: {"alerts": []})
+    _mark_fresh()
     alerts.check(dry_run=True)
     from app import state
     assert state.status()["snapshots_total_rows"] == 0

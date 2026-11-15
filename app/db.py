@@ -29,6 +29,10 @@ CREATE TABLE IF NOT EXISTS weather_meta (
     hub_id TEXT PRIMARY KEY, grid_lat REAL, grid_lon REAL, elevation_m REAL,
     start_date TEXT, end_date TEXT, fetched_at TEXT
 );
+CREATE TABLE IF NOT EXISTS refresh_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, finished_at TEXT NOT NULL,
+    ok INTEGER NOT NULL, window TEXT NOT NULL, report TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS fema_declarations (
     hub_id TEXT NOT NULL, disaster_number INTEGER NOT NULL, incident_type TEXT NOT NULL,
     declaration_type TEXT, declaration_date TEXT NOT NULL, designated_area TEXT,

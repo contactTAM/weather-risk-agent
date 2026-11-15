@@ -67,7 +67,30 @@ def current_scores() -> tuple[dict, dict]:
     return scores, current
 
 
-def check(dry_run: bool = False, include_nws: bool = True) -> dict:
+class DataNotFresh(Exception):
+    """The local cache wasn't refreshed recently: comparing it with the durable snapshot could fire
+    false alerts (e.g. right after a restart restored the older seed)."""
+
+
+def max_data_age_hours() -> float:
+    return float(os.getenv("ALERT_MAX_DATA_AGE_H", "12"))
+
+
+def ensure_fresh() -> None:
+    from app.data import refresh as refresh_mod
+    if refresh_mod.is_running():
+        raise DataNotFresh("A data refresh is in progress; check again when it has finished.")
+    age = refresh_mod.data_age_hours()
+    if age is None:
+        raise DataNotFresh("No successful data refresh in this cache yet (e.g. after a restart). "
+                           "Run POST /refresh first, or POST /alerts/run to do both.")
+    if age > max_data_age_hours():
+        raise DataNotFresh(f"Data is {age:.1f} h old (limit {max_data_age_hours():g} h). Run POST /refresh first.")
+
+
+def check(dry_run: bool = False, include_nws: bool = True, require_fresh: bool = True) -> dict:
+    if require_fresh:
+        ensure_fresh()
     ts = now_iso()
     scores, current = current_scores()
     hubs = {h.id: h for h in load_hubs()}
@@ -97,14 +120,29 @@ def check(dry_run: bool = False, include_nws: bool = True) -> dict:
             "nws_alerts": sum(e["type"] == "nws_alert" for e in events)}
 
 
+def refresh_then_check(force: bool = False) -> dict:
+    """The scheduled flow: refresh the cache, then compare with the durable snapshot.
+    If the refresh failed, the comparison is skipped (no alerts from stale data)."""
+    from app.data.refresh import refresh
+    r = refresh(force=force)
+    summary = {k: r.get(k) for k in ("status", "ok", "started_at", "finished_at", "window")}
+    if not r.get("ok"):
+        errors = [e for e in r.get("report", []) if "weather_error" in e or "fema_error" in e]
+        return {"refresh": summary, "refresh_errors": errors, "check": None,
+                "error": "refresh failed or already running; comparison skipped"}
+    return {"refresh": summary, "check": check()}
+
+
 def start_scheduler() -> None:
     global _scheduler
-    hours = float(os.getenv("ALERT_SCHEDULE_HOURS", "6"))
+    # Opt-in fallback for always-on hosts. Off by default: on a free host that sleeps, an external
+    # scheduler (GitHub Actions, .github/workflows/alert-check.yml) is reliable; running both would double-check.
+    hours = float(os.getenv("ALERT_SCHEDULE_HOURS", "0"))
     if hours <= 0 or _scheduler is not None:
         return
     from apscheduler.schedulers.background import BackgroundScheduler
     _scheduler = BackgroundScheduler(daemon=True)
-    _scheduler.add_job(lambda: log.info("alert check: %s", {k: v for k, v in check().items() if k != "events"}),
+    _scheduler.add_job(lambda: log.info("scheduled refresh + alert check: %s", refresh_then_check()),
                        "interval", hours=hours, id="alert-check", max_instances=1, coalesce=True)
     _scheduler.start()
 
