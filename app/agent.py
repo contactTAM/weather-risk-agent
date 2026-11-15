@@ -124,8 +124,10 @@ def ungrounded_numbers(text: str, tool_results: list[dict]) -> list[str]:
         derived = {k * 100 for k in known} | {k / 100 for k in known}
         if any(abs(v - k) <= tol for k in known | derived):
             continue
-        # arithmetic on grounded numbers (e.g. "leads by 54.5 points" = 100.0 - 45.5) is grounded too
-        if any(abs(abs(a - b) - v) <= tol for i, a in enumerate(known_list) for b in known_list[i + 1:]):
+        # A computed gap between two one-decimal tool values ("leads by 54.5 points" = 100.0 - 45.5) is
+        # grounded. Only for decimal numbers and with a tight tolerance: with integers and +/-0.5 almost any
+        # number is the difference of two known ones (an injected "99" passed as 100 - 1.0; eval caught it).
+        if "." in s and any(abs(abs(a - b) - v) <= 0.051 for i, a in enumerate(known_list) for b in known_list[i + 1:]):
             continue
         bad.append(s)
     return bad
@@ -206,9 +208,8 @@ def chat(session_id: str, message: str, client: anthropic.Anthropic | None = Non
 
         answer = AgentAnswer(**parsed.model_dump(exclude={"hub_ids"}),
                              hubs=build_hub_rows(parsed.hub_ids, parsed.focus_hazard), meta=meta)
-        mentioned = json.dumps(tool_results, default=str)
-        meta.grounding_warnings += [f"hub {h} not returned by any tool" for h in parsed.hub_ids
-                                    if f'"{h}"' not in mentioned]
+        # (No "hub not returned by a tool" warning: unknown ids are rejected by the validator and table
+        #  values are filled from scoring.py, so it only flagged correct tool-free answers.)
         meta.grounding_warnings += [f"number {n} not found in tool results"
                                     for n in ungrounded_numbers(parsed.answer, tool_results)]
         save_turn(session_id, message, text)

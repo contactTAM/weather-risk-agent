@@ -74,7 +74,8 @@ def health() -> dict:
     return {"status": "ok" if hubs_with_data == len(load_hubs()) else "degraded",
             "hubs_configured": len(load_hubs()), "hubs_with_weather": hubs_with_data,
             "daily_rows": days, "weather_fetched_at": fetched, "model": llm_model(),
-            "refresh_running": _refresh_state["running"], "access_code_required": bool(os.getenv("ACCESS_CODE"))}
+            "refresh_running": _refresh_state["running"], "access_code_required": bool(os.getenv("ACCESS_CODE")),
+            "commit": (os.getenv("RENDER_GIT_COMMIT") or "")[:7] or None}
 
 
 @app.post("/chat", response_model=AgentAnswer, dependencies=[Depends(require_access), Depends(rate_limit)])

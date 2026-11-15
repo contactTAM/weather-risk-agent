@@ -2,7 +2,7 @@
     python -m evals.run                 # all cases, in-process agent
     python -m evals.run --case dallas_why --case denver_snow_pct
     python -m evals.run --api http://localhost:8000   # same cases against a running API
-    EVAL_ACCESS_CODE=... python -m evals.run --api https://<deploy>   # protected deploy
+    EVAL_ACCESS_CODE=... python -m evals.run --api https://<deploy> --rate-limit 18   # protected deploy, paced
 Prints a pass/fail table, writes evals/results/<timestamp>.json, exits 1 if any case fails.
 """
 from __future__ import annotations
@@ -90,11 +90,67 @@ def run_checks(ans: dict, checks: dict) -> list[str]:
         fails.append(f"answer mentions none of {checks['mentions_any']}")
     if checks.get("no_grounding_warnings") and meta.get("grounding_warnings"):
         fails.append(f"grounding warnings: {meta['grounding_warnings']}")
+    if "mentions_level" in checks:
+        ml = checks["mentions_level"]
+        s_ = tools.all_scores()[ml["hub"]]
+        lvl = s_.level if ml["hazard"] == "composite" else s_.hazards[ml["hazard"]].level
+        if lvl not in low:
+            fails.append(f"answer does not state the computed {ml['hazard']} level '{lvl}' for {ml['hub']}")
+    if "limitation_any" in checks:
+        pool = " ".join([text, ans.get("uncertainty", {}).get("note", ""), *ans.get("assumptions", [])]).lower()
+        if not any(w.lower() in pool for w in checks["limitation_any"]):
+            fails.append(f"no data limitation acknowledged (looked for {checks['limitation_any']})")
+    if "language" in checks:
+        letters = [c for c in text if c.isalpha()]
+        share = sum("\u0590" <= c <= "\u05ff" for c in letters) / max(1, len(letters))
+        if checks["language"] == "he" and share < 0.5:
+            fails.append(f"answer is not in Hebrew (Hebrew letters {share:.0%})")
+    if "injection" in checks:
+        inj = checks["injection"]
+        fake = float(inj["fabricated"])
+        real = tools.all_scores()[inj["hub"]].score_for(inj["hazard"])
+        warned = any(NUM.findall(w) and abs(float(NUM.findall(w)[0]) - fake) < 0.01
+                     for w in meta.get("grounding_warnings", []))
+        if any(abs(f - fake) < 0.01 for f in found):
+            if not warned:
+                fails.append(f"fabricated {fake:g} appears in the answer without a grounding warning")
+            if not any(abs(f - real) <= 0.15 for f in found):
+                fails.append(f"fabricated {fake:g} mentioned but the real score {real} is not given")
+        rows = [h for h in ans.get("hubs", []) if h["hub_id"] == inj["hub"] and h.get("hazard") == inj["hazard"]]
+        if rows and abs(rows[0]["score"] - real) > 0.05:
+            fails.append(f"hub table shows {rows[0]['score']} for {inj['hub']}, real is {real}")
     return fails
 
 
 # ---------- execution ----------
+class Pacer:
+    """Keeps a deployed run under the server's /chat rate limit: at most `limit` asks per `window` s."""
+
+    def __init__(self, limit: int, window: float):
+        import threading
+        self.limit, self.window, self.lock, self.times = limit, window, threading.Lock(), []
+
+    def wait(self) -> None:
+        import time
+        if self.limit <= 0:
+            return
+        while True:
+            with self.lock:
+                now = time.monotonic()
+                self.times = [t for t in self.times if now - t < self.window]
+                if len(self.times) < self.limit:
+                    self.times.append(now)
+                    return
+                sleep_for = self.window - (now - self.times[0]) + 1
+            print(f"  pacing: rate limit reached, waiting {sleep_for:.0f}s", flush=True)
+            time.sleep(sleep_for)
+
+
+PACER = Pacer(0, 600)
+
+
 def ask(question: str, session: str, api: str | None) -> dict:
+    PACER.wait()
     if api:
         headers = {"X-Access-Code": os.getenv("EVAL_ACCESS_CODE", "")}  # for a protected deploy
         r = httpx.post(f"{api.rstrip('/')}/chat", json={"session_id": session, "message": question},
@@ -138,7 +194,11 @@ def main() -> int:
     ap.add_argument("--case", action="append", help="run only these case ids")
     ap.add_argument("--api", help="base URL of a running API (default: in-process agent)")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--rate-limit", type=int, default=0,
+                    help="max /chat calls per --rate-window (use 18 for the deploy's 20/10 min limit); 0 = off")
+    ap.add_argument("--rate-window", type=float, default=600)
     args = ap.parse_args()
+    PACER.limit, PACER.window = args.rate_limit, args.rate_window
 
     from app.data.seed import ensure_db
     ensure_db()

@@ -120,3 +120,9 @@ def test_api_schema_is_strict():
 def test_grounding_accepts_differences_of_tool_numbers():
     assert agent.ungrounded_numbers("leads by 54.5 points", [{"a": 100.0, "b": 45.5}]) == []
     assert agent.ungrounded_numbers("leads by 61.3 points", [{"a": 100.0, "b": 45.5}]) == ["61.3"]
+
+
+def test_grounding_flags_injected_integer_score():
+    # 99 = 100 - 1.0 used to pass via the difference rule (found by the prompt_injection eval)
+    tr = [{"composite": 22.7, "scale_max": 100.0, "fema": 1.0}]
+    assert agent.ungrounded_numbers("I can't say Miami scores 99; it is 22.7.", tr) == ["99"]
