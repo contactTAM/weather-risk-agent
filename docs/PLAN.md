@@ -45,6 +45,12 @@ Data layer (app/data/*.py): fetchers → SQLite cache (raw_responses, daily_weat
 4. **Python 3.12 via `uv`.** System Python is 3.14, and some wheels lag behind it, so 3.12 is safer.
 5. **Anthropic only (Guy's decision, 2026-11-15).** The model name comes from `LLM_MODEL` in `.env`, with no default in the code. If it isn't set, the app refuses to start with a clear error. In milestone 5, a one-line test call against the API confirms the model name. The OpenAI adapter is dropped: one provider done well beats two done thinly.
 
+### Changes after approval
+- **Anthropic only** (see decision 5).
+- **FEMA county rows only.** Statewide rows (`fipsCountyCode '000'`) are excluded: many are tribal-nation declarations unrelated to the hub city (Arizona: 20 statewide "Severe Storm" rows). Added `Straight-Line Winds` → wind and `Freezing` → winter after seeing them in the data.
+- **Anchor calibration** after the first pull: heavy-snow days 8 → 4 and severe-gust (≥ 90 km/h) days 5 → 2. Reanalysis smooths peaks: the maximum across hubs was 1.2 and 1.0 days a year, so both indicators were stuck at about 3 points. No other anchors were changed.
+- **"Had snowfall"** = any measurable snowfall (≥ 0.1 cm), for the % question. The winter score uses ≥ 1 cm days. The stat tool returns both.
+
 ## Hubs (`data/hubs.yaml`)
 Midwest: Chicago (Cook 17031), Minneapolis (Hennepin 27053), Detroit (Wayne 26163), Indianapolis (Marion 18097), Kansas City (Jackson MO 29095), Columbus (Franklin OH 39049).
 Others: Miami (Miami-Dade 12086, South), Houston (Harris 48201, South), Dallas (Dallas 48113, South), Atlanta (Fulton 13121, South), Memphis (Shelby 47157, South), Denver (Denver 08031, West), Phoenix (Maricopa 04013, West), Newark (Essex 34013, Northeast). Regions follow the US Census regions.
@@ -55,11 +61,11 @@ Yearly-average indicators over 2021–2025 (FEMA: count over 20 years). Each ind
 | Hazard (composite weight) | Indicator | Anchor 0 → 100 | Weight |
 |---|---|---|---|
 | **Winter (0.30)** | days snowfall ≥ 1 cm | 0 → 40 | 0.35 |
-| | days snowfall ≥ 10 cm (heavy) | 0 → 8 | 0.20 |
+| | days snowfall ≥ 10 cm (heavy) | 0 → 4 (was 8) | 0.20 |
 | | days Tmin ≤ 0 °C | 0 → 150 | 0.25 |
 | | FEMA Winter Storm/Snowstorm/Severe Ice Storm | 0 → 6 | 0.20 |
 | **Wind/Hurricane (0.25)** | days gust ≥ 60 km/h | 0 → 40 | 0.30 |
-| | days gust ≥ 90 km/h | 0 → 5 | 0.30 |
+| | days gust ≥ 90 km/h | 0 → 2 (was 5) | 0.30 |
 | | FEMA Hurricane/Tropical Storm/Tornado | 0 → 10 | 0.40 |
 | **Flood/Heavy rain (0.30)** | days precip ≥ 25 mm | 0 → 20 | 0.35 |
 | | days precip ≥ 50 mm | 0 → 5 | 0.25 |

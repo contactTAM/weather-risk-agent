@@ -1,0 +1,41 @@
+# Weather Disruption Risk scoring config. All values are documented judgment calls.
+# Normalization: fixed anchors. score_i = clip((value - zero) / (full - zero), 0, 1) * 100
+#   "zero" = no exposure, "full" = what we consider high exposure for a logistics hub.
+#   Fixed anchors (not min-max across hubs) keep a hub's score independent of the other hubs,
+#   so scores are stable over time and an alert on "score changed" is meaningful.
+# Weather indicators are yearly averages over the baseline (2021-2025).
+# Calibration change (2026-11-15, after first data pull): heavy_snow_days full 8->4, gust90_days full 5->2.
+#   Reanalysis smooths peaks: max observed across hubs was 1.2 heavy-snow days/yr and 1.0 severe-gust days/yr,
+#   so the original anchors capped these indicators at ~3 points and they could not separate hubs.
+#   No other anchors were changed. Hurricane signal comes mainly from FEMA (Miami: 0.2 gust>=90 days/yr).
+# FEMA indicators are counts of distinct county declarations over 2006-2025.
+
+levels: {moderate: 33, high: 66}     # low < 33 <= moderate < 66 <= high
+close_call_points: 3                 # adjacent ranks within this many points are flagged as a close call
+
+composite_weights: {winter: 0.30, wind: 0.25, flood: 0.30, heat: 0.15}
+
+hazards:
+  winter:
+    label: Winter (snow, ice, freezing)
+    indicators:
+      snow_days_1cm:     {weight: 0.35, zero: 0, full: 40,  unit: days/yr, label: "Days with snowfall >= 1 cm"}
+      heavy_snow_days:   {weight: 0.20, zero: 0, full: 4,   unit: days/yr, label: "Days with snowfall >= 10 cm"}
+      freeze_days:       {weight: 0.25, zero: 0, full: 150, unit: days/yr, label: "Days with min temp <= 0 C"}
+      fema_winter:       {weight: 0.20, zero: 0, full: 6,   unit: declarations/20yr, label: "FEMA winter storm / snowstorm / ice storm declarations"}
+  wind:
+    label: Hurricane and high wind
+    indicators:
+      gust60_days:       {weight: 0.30, zero: 0, full: 40,  unit: days/yr, label: "Days with gusts >= 60 km/h"}
+      gust90_days:       {weight: 0.30, zero: 0, full: 2,   unit: days/yr, label: "Days with gusts >= 90 km/h"}
+      fema_wind:         {weight: 0.40, zero: 0, full: 10,  unit: declarations/20yr, label: "FEMA hurricane / tropical storm / tornado / wind declarations"}
+  flood:
+    label: Flood and heavy rain
+    indicators:
+      rain25_days:       {weight: 0.35, zero: 0, full: 20,  unit: days/yr, label: "Days with precipitation >= 25 mm"}
+      rain50_days:       {weight: 0.25, zero: 0, full: 5,   unit: days/yr, label: "Days with precipitation >= 50 mm"}
+      fema_flood:        {weight: 0.40, zero: 0, full: 15,  unit: declarations/20yr, label: "FEMA flood / severe storm / coastal storm declarations"}
+  heat:
+    label: Extreme heat
+    indicators:
+      heat_days:         {weight: 1.00, zero: 0, full: 120, unit: days/yr, label: "Days with max temp >= 35 C"}
