@@ -77,3 +77,10 @@ def test_schemas_are_valid_for_llm():
     for t in tools.TOOLS.values():
         s = t.schema()
         assert s["input_schema"]["type"] == "object" and s["description"]
+
+
+def test_weather_stat_defines_every_threshold(seeded):
+    from app.metrics import DAY_FLAGS
+    out = tools.run_tool("get_weather_stat", {"hub_id": "MIA", "metric": "gust90_days", "year": 2025})
+    assert set(out["definitions"]) == set(DAY_FLAGS)
+    assert "90 km/h" in out["definitions"]["gust90_days"]

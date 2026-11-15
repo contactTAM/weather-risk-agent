@@ -85,6 +85,21 @@ def _hub_brief(h: Hub) -> dict:
     return {"hub_id": h.id, "name": h.name, "city": h.city, "state": h.state, "region": h.region}
 
 
+# Every daily threshold, returned with weather stats so the agent can cite thresholds from tool data
+# (the stricter grounding check flagged "90" km/h when only snow definitions were returned).
+METRIC_DEFINITIONS = {
+    "snowfall_any_days": "snowfall >= 0.1 cm (any measurable snowfall)",
+    "snow_days_1cm": "snowfall >= 1 cm",
+    "heavy_snow_days": "snowfall >= 10 cm",
+    "freeze_days": "minimum temperature <= 0 C",
+    "gust60_days": "max wind gust >= 60 km/h",
+    "gust90_days": "max wind gust >= 90 km/h",
+    "rain25_days": "precipitation >= 25 mm",
+    "rain50_days": "precipitation >= 50 mm",
+    "heat_days": "maximum temperature >= 35 C",
+}
+
+
 # ---------- argument models ----------
 class ListHubsArgs(BaseModel):
     region: str | None = Field(None, description="Census region: Midwest, South, West, Northeast")
@@ -205,8 +220,7 @@ def get_weather_stat(args: WeatherStatArgs) -> dict:
         other = "snow_days_1cm" if args.metric == "snowfall_any_days" else "snowfall_any_days"
         related[other] = weather_stat(daily, other, args.year)
     return {"hub": _hub_brief(h), "stat": stat, "related": related,
-            "definitions": {"snowfall_any_days": "snowfall_sum >= 0.1 cm (any measurable snowfall)",
-                            "snow_days_1cm": "snowfall_sum >= 1 cm"},
+            "definitions": METRIC_DEFINITIONS,
             "data_used": [{"source": SOURCES["open_meteo"]["source"], "period": f"{args.year} (calendar year, local time)"}],
             "note": "Grid-cell reanalysis value near the city centre, not a station record."}
 
