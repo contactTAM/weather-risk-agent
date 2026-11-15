@@ -137,7 +137,7 @@ All of it lives in `app/scoring.py` as pure functions, configured in `config/sco
 
 - **Expected values are computed at run time from the deterministic layer, never typed in by hand.** For example, the Midwest winter top 3 comes from `rank_hubs` and the Denver % from `get_weather_stat`. So the evals test whether the agent *faithfully reports* the scoring layer, and they keep working when data or weights change.
 - **Every check is deterministic** (no LLM-as-judge): schema valid with no error, in/out of scope, tools called, hub order, expected numbers present in the answer within a tolerance, required wording, no grounding warnings, assumptions present. The checker itself is unit-tested.
-- **Results across three runs during development:** 14/14, then 13/14, then 14/14. The failure in run 2 was a wrong expectation: the agent offered in-network alternatives for Seattle, which the system prompt asks for. The check was changed to test the real risk, inventing numbers for an unknown hub. Run 1's schema retries led to a real fix (`list_hubs` now cites its source). See `evals/sample_results.json`.
+- **Results across three runs during development:** 14/14, then 13/14, then 14/14. The failure in run 2 was a wrong expectation: the agent offered in-network alternatives for Seattle, which the system prompt asks for. The check was changed to test the real risk, inventing numbers for an unknown hub. Run 1's schema retries led to a real fix (`list_hubs` now cites its source). See `evals/sample_results.json`; the same set also passed 14/14 against the live deploy (`evals/sample_results_deployed.json`, via `--api` with `EVAL_ACCESS_CODE`).
 
 `uv run pytest` runs **47 unit tests** with no network and no LLM: scoring and metrics on synthetic data, fetchers with mocked HTTP, tools, the agent loop with a fake LLM client (tool loop, retry path, double failure, refusal, memory, grounding), the API and alerts.
 
@@ -153,7 +153,7 @@ The historical scores move only when data is refreshed, the window rolls over, F
 
 ## 9. Deployment
 
-The app is one Docker image (`Dockerfile`) deployed as a Render web service from `render.yaml`; it's stateless apart from the SQLite file, which the seed restores on start. A public URL would otherwise spend the owner's LLM credits, so the endpoints that cost money or change state (`/chat`, `/refresh`, `/alerts/check`) require an `X-Access-Code` when `ACCESS_CODE` is set (constant-time comparison), and `/chat` has a per-IP sliding-window rate limit. Read-only endpoints stay public. Chat memory and alert snapshots live on the instance's ephemeral disk, which is acceptable for a demo; production would use a managed Postgres.
+Live at https://weather-risk-agent-ae3s.onrender.com. The app is one Docker image (`Dockerfile`) deployed as a Render web service from `render.yaml`; it's stateless apart from the SQLite file, which the seed restores on start. A public URL would otherwise spend the owner's LLM credits, so the endpoints that cost money or change state (`/chat`, `/refresh`, `/alerts/check`) require an `X-Access-Code` when `ACCESS_CODE` is set (constant-time comparison), and `/chat` has a per-IP sliding-window rate limit. Read-only endpoints stay public. Chat memory and alert snapshots live on the instance's ephemeral disk, which is acceptable for a demo; production would use a managed Postgres.
 
 ## 10. Assumptions
 

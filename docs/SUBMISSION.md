@@ -1,6 +1,6 @@
 # Weather Risk Intelligence Agent: submission summary
 
-**Repository:** https://github.com/contactTAM/weather-risk-agent · **Run:** see README "Quick start" (about 2 minutes, Anthropic key required)
+**Repository:** https://github.com/contactTAM/weather-risk-agent · **Live demo:** https://weather-risk-agent-ae3s.onrender.com (access code shared separately) · **Run locally:** see README "Quick start" (about 2 minutes, Anthropic key required)
 
 **What it does.** A chat agent for logistics analysts that ranks, compares and explains how exposed 14 US distribution hubs are to weather disruption. It answers questions like "Which Midwest hubs are most exposed to winter disruption?", "Compare Miami and Houston on hurricane and flood", "What % of days in Denver last year had snowfall?" (10.1% in 2025) and "Why is Dallas high?". Follow-ups such as "and Chicago?" keep their context. Each answer comes with a hub/score table, the reasoning, the data sources and periods, the assumptions, and an uncertainty level.
 
@@ -10,7 +10,7 @@
 
 **Architecture (brief).** FastAPI serves a single-page chat UI (with browser voice input and output) and the endpoints `/chat`, `/scores`, `/hubs/{id}/breakdown`, `/refresh`, `/alerts/check` and `/health`. The agent runs a manual Claude tool loop with session memory in SQLite. Bonus: an APScheduler job (and an endpoint) diffs scores against the last snapshot, watches for new Severe/Extreme NWS alerts and POSTs JSON to a webhook. In the demo it caught a real NWS Freeze Warning at Atlanta. Why SQLite: one file, no ops, an offline demo, and a 0.5 MB data seed so a fresh clone works immediately; at scale it would move to Postgres.
 
-**Quality.** 47 unit tests (no network or LLM; HTTP mocked; fake LLM client for the agent loop, the retry and refusal paths, and memory). The evaluation set has 14 cases with deterministic checks, and **the expected values are computed from the scoring code at run time**: correct tools, hub order, numbers within tolerance, premise checks, unknown hub, out of scope, no ungrounded numbers. Result: 14/14 (`evals/sample_results.json`).
+**Quality.** 47 unit tests (no network or LLM; HTTP mocked; fake LLM client for the agent loop, the retry and refusal paths, and memory). The evaluation set has 14 cases with deterministic checks, and **the expected values are computed from the scoring code at run time**: correct tools, hub order, numbers within tolerance, premise checks, unknown hub, out of scope, no ungrounded numbers. Result: 14/14 locally and 14/14 against the live deploy (`evals/sample_results*.json`).
 
 **Key assumptions.** The hubs are fictional (real cities, with city-centre coordinates as the hub site). "Last year" means 2025. "Had snowfall" means ≥ 0.1 cm, while the winter score uses ≥ 1 cm days. FEMA declarations reflect impact and process, not weather alone.
 

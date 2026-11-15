@@ -2,12 +2,14 @@
     python -m evals.run                 # all cases, in-process agent
     python -m evals.run --case dallas_why --case denver_snow_pct
     python -m evals.run --api http://localhost:8000   # same cases against a running API
+    EVAL_ACCESS_CODE=... python -m evals.run --api https://<deploy>   # protected deploy
 Prints a pass/fail table, writes evals/results/<timestamp>.json, exits 1 if any case fails.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import uuid
@@ -94,7 +96,9 @@ def run_checks(ans: dict, checks: dict) -> list[str]:
 # ---------- execution ----------
 def ask(question: str, session: str, api: str | None) -> dict:
     if api:
-        r = httpx.post(f"{api.rstrip('/')}/chat", json={"session_id": session, "message": question}, timeout=180)
+        headers = {"X-Access-Code": os.getenv("EVAL_ACCESS_CODE", "")}  # for a protected deploy
+        r = httpx.post(f"{api.rstrip('/')}/chat", json={"session_id": session, "message": question},
+                       headers=headers, timeout=180)
         r.raise_for_status()
         return r.json()
     return agent.chat(session, question).model_dump()
