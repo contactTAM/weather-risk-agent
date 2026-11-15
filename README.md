@@ -44,10 +44,10 @@ You can also click a hub on the network board to ask why it scores where it does
 | What | Command |
 |---|---|
 | Run the API and UI | `uv run uvicorn app.api:app --port 8000` |
-| Unit tests (47, no network, no LLM) | `uv run pytest` |
-| Evaluation set (14 cases, live LLM, about $0.50–1 per run) | `uv run python -m evals.run` |
+| Unit tests (50, no network, no LLM) | `uv run pytest` |
+| Evaluation set (19 cases, live LLM, about $0.70–1.20 per run) | `uv run python -m evals.run` |
 | Evals for some cases only, or against a running server | `uv run python -m evals.run --case dallas_why --api http://localhost:8000` |
-| Evals against the protected deploy (the rate limit of 20 chats per 10 minutes allows one full run per 10 minutes) | `EVAL_ACCESS_CODE=... uv run python -m evals.run --api https://weather-risk-agent-ae3s.onrender.com` |
+| Evals against the protected deploy, paced under its limit of 20 chats per 10 minutes | `EVAL_ACCESS_CODE=... uv run python -m evals.run --api https://weather-risk-agent-ae3s.onrender.com --rate-limit 18` |
 | Refresh public data | `uv run python -m app.data.refresh [--force] [--hub DEN]` |
 | Ask one question from the CLI | `uv run python -m app.agent "Why is Dallas high?"` |
 | Run the alert check once | `curl -X POST localhost:8000/alerts/check` |
