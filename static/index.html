@@ -51,7 +51,7 @@
   <aside class="board" aria-label="Network board">
     <div class="board-head">
       <h2>Network board</h2>
-      <p class="sub">2021–2025 baseline · FEMA 2006–2025</p>
+      <p class="sub" id="boardPeriod">&nbsp;</p>
     </div>
     <div class="tabs" role="tablist" id="tabs">
       <button role="tab" data-h="composite" class="on">Overall</button>
@@ -61,7 +61,8 @@
       <button role="tab" data-h="heat">Heat</button>
     </div>
     <ol id="board" class="board-list"></ol>
-    <p class="legend"><span class="lv low"></span>low &lt;33 <span class="lv moderate"></span>moderate &lt;66 <span class="lv high"></span>high · <span class="cc">≈</span> close call</p>
+    <p class="legend"><span class="lv low"></span>low &lt;33 <span class="lv moderate"></span>moderate &lt;66 <span class="lv high"></span>high</p>
+    <p class="legend" id="ccLegend"><span class="cc">≈</span> within <span id="ccPts">3</span> points of the next-ranked hub: their order isn't meaningful</p>
     <p class="fine">Scores are computed by code from Open-Meteo reanalysis and OpenFEMA county declarations. The agent explains them; it never sets them.</p>
   </aside>
 </main>

@@ -22,13 +22,23 @@ fetch("/health").then((r) => r.json()).then((h) => {
 async function loadBoard(hazard) {
   const r = await fetch(`/scores?hazard=${hazard}`);
   const d = await r.json();
-  $("#board").innerHTML = d.ranking.map((x) => `
+  const per = (d.data_used || []).map((u) => (u.period || "").split(" ")[0]);  // rolling window from the API
+  if (per.length >= 2) $("#boardPeriod").textContent = `${per[0].replace("-", "–")} baseline · FEMA ${per[1].replace("-", "–")}`;
+  const pts = d.close_call_points;
+  $("#ccPts").textContent = pts;
+  $("#board").innerHTML = d.ranking.map((x, i) => {
+    const nxt = d.ranking[i + 1];
+    const cc = x.close_call_with_next && nxt
+      ? ` · <span class="cc" title="Within ${pts} points of #${nxt.rank} (${esc(nxt.city)}, ${nxt.score.toFixed(1)}): their order isn't meaningful">≈ #${nxt.rank}</span>`
+      : "";
+    return `
     <li data-city="${esc(x.city)}" title="Ask why ${esc(x.city)} scores ${x.score}">
       <span class="rk">${x.rank}</span>
-      <span class="nm">${esc(x.city)} <small>${esc(x.hub_id)}${x.close_call_with_next ? ' · <span class="cc">≈</span> next' : ""}</small>
+      <span class="nm">${esc(x.city)} <small>${esc(x.hub_id)}${cc}</small>
         <span class="bar"><i class="${x.level}" style="width:${x.score}%"></i></span></span>
       <span class="sc">${x.score.toFixed(1)}</span>
-    </li>`).join("");
+    </li>`;
+  }).join("");
 }
 $("#tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;

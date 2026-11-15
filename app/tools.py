@@ -166,6 +166,7 @@ def rank_hubs(args: RankHubsArgs) -> dict:
             "scale": SCALE,
             "weights": cfg["composite_weights"] if args.hazard == COMPOSITE else
                        {k: v["weight"] for k, v in cfg["hazards"][args.hazard]["indicators"].items()},
+            "close_call_points": cfg["close_call_points"],
             "close_call_note": "close_call_with_next=true means the next hub is within "
                                f"{cfg['close_call_points']} points: treat their order as uncertain.",
             "data_used": [sources()["open_meteo"], sources()["fema"]]}
