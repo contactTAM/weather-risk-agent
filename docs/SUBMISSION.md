@@ -1,6 +1,6 @@
 # Weather Risk Intelligence Agent: submission summary
 
-**Repository:** https://github.com/contactTAM/weather-risk-agent · **Live demo:** https://weather-risk-agent-ae3s.onrender.com (access code shared separately) · **Run locally:** see README "Quick start" (about 2 minutes, Anthropic key required)
+**Repository:** https://github.com/contactTAM/weather-risk-agent · **Live demo:** https://weather-risk-agent-ae3s.onrender.com (the access code is in the submission email) · **Run locally:** see README "Quick start" (about 2 minutes, Anthropic key required)
 
 **What it does.** A chat agent for logistics analysts that ranks, compares and explains how exposed 14 US distribution hubs are to weather disruption. It answers questions like "Which Midwest hubs are most exposed to winter disruption?", "Compare Miami and Houston on hurricane and flood", "What % of days in Denver last year had snowfall?" (10.1% in 2025) and "Why is Dallas high?". Follow-ups such as "and Chicago?" keep their context. Each answer comes with a hub/score table, the reasoning, the data sources and periods, the assumptions, and an uncertainty level.
 
@@ -16,4 +16,4 @@
 
 **Limitations.** Reanalysis grid data smooths extremes: peak gusts are under-counted, so the hurricane signal relies on FEMA. Five years is a short window for rare events. The weights are documented judgment calls, not fitted to real disruption outcomes. The score measures *exposure*, not hub vulnerability or business value. All of these are stated in the agent's answers. Next steps: fit the weights to disruption data, add hub vulnerability and criticality, add station data and NOAA Storm Events, and add forecast-driven alerts.
 
-*Built with Claude Code. The full session is part of the submission. Plan and design decisions: docs/PLAN.md and docs/ARCHITECTURE.md.*
+**How it was built.** Plan first (plan mode, approved), then 11 milestones with one commit each, each verified before the next. Real data and API behavior drove three documented changes: anchor calibration, FEMA county-only rows, and JSON-schema output replacing a forced tool call. The full Claude Code session is included in the submission (see docs/ARCHITECTURE.md §14).

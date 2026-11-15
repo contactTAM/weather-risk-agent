@@ -2,7 +2,7 @@
   "passed": 14,
   "total": 14,
   "api": "https://weather-risk-agent-ae3s.onrender.com",
-  "model": null,
+  "model": "claude-sonnet-5-5",
   "results": [
     {
       "id": "midwest_winter",
@@ -11,7 +11,8 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "Minneapolis (MSP) is the most exposed Midwest hub to winter disruption. Its winter score is 48.2, which is moderate, not high. Chicago (CHI) is next at 39.9, then Detroit (DTW) at 37.4 and Kansas City (MCI) at 33.8, all moderate. Indianapolis (30.7) and Columbus (30.1) are low. MSP is driven by 146.4 freeze days/yr (min temp <= 0 C) and 20.4 days/yr with snowfall >= 1 cm. CHI has 103.6 freeze days and 18.6 snow days/yr. Chicago and Detroit are separated by 2.5 points, so their order is not meaningful. The same goes for Indianapolis and Columbus.",
+      "model": "claude-sonnet-5-5",
+      "answer": "Minneapolis (MSP) is the Midwest hub most exposed to winter disruption, with a winter score of 48.2. That is still only moderate in absolute terms. Chicago (39.9) and Detroit (37.4) follow, also moderate, and Kansas City is at 33.8, just inside moderate. Indianapolis (30.7) and Columbus (30.1) are low. No Midwest hub reaches the high band (66 or above). MSP's main drivers are 146.4 freeze days/yr (min temp <= 0 C) and 20.4 days/yr with snowfall >= 1 cm. Chicago has 103.6 freeze days and 18.6 snow days/yr. Detroit has 111.4 freeze days and 17.0 snow days/yr.",
       "hubs": [
         "MSP",
         "CHI",
@@ -25,7 +26,7 @@
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 7909,
+      "latency_ms": 8044,
       "grounding_warnings": []
     },
     {
@@ -35,7 +36,8 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "Miami has the higher hurricane/wind exposure and Houston has much higher flood exposure. Wind: Miami scores 51.9 (moderate) and Houston 43.1 (moderate). Miami's score is driven mainly by 11 FEMA wind declarations over 20 years, against 8 for Houston. Flood: Houston scores 74.7 (high) and Miami 32.4 (low). Houston has 23.6 days/yr with at least 25 mm of rain, against 9.2 for Miami. It also has 4.2 days/yr with at least 50 mm, against 2.2, and 7 FEMA flood declarations, against 2. Houston's composite score is 39.0 and Miami's is 22.7. Both are moderate or low in absolute terms, even though Houston's flood score is high.",
+      "model": "claude-sonnet-5-5",
+      "answer": "Miami has higher hurricane/wind exposure, and Houston has much higher flood exposure. Wind: Miami scores 51.9 (moderate) and Houston 43.1 (moderate). The gap comes mainly from FEMA wind declarations, 11 for Miami and 8 for Houston over 20 years. Gust days are similar: 11.8 days/yr at 60 km/h or more for Miami and 10.8 for Houston. Flood: Houston scores 74.7 (high) and Miami 32.4 (low). Houston has 23.6 days/yr with 25 mm or more of rain, against 9.2 for Miami. It also has 4.2 days/yr at 50 mm or more (Miami 2.2) and 7 FEMA flood declarations (Miami 2). Composite scores are 39.0 for Houston and 22.7 for Miami. Only Houston's flood score is high in absolute terms. Both hubs are moderate on wind.",
       "hubs": [
         "HOU",
         "MIA"
@@ -45,7 +47,7 @@
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 8302,
+      "latency_ms": 8512,
       "grounding_warnings": []
     },
     {
@@ -55,6 +57,7 @@
       ],
       "pass": true,
       "failures": [],
+      "model": "claude-sonnet-5-5",
       "answer": "In 2025, Denver had measurable snowfall (at least 0.1 cm) on 37 of 365 days, which is 10.1% of days. Snowfall of at least 1 cm occurred on 17 days, or 4.7%.",
       "hubs": [
         "DEN"
@@ -64,7 +67,7 @@
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 6201,
+      "latency_ms": 5866,
       "grounding_warnings": []
     },
     {
@@ -74,7 +77,8 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "Dallas's composite Weather Disruption Risk Score is 36.5, which is moderate, not high. The moderate band starts at 33. It ranks 2nd of 14 hubs, so it is high relative to the network but not in absolute terms. Flood and heavy rain contribute most, at 16.3 points. The flood score is 54.3, driven by 16.2 days/yr with at least 25 mm of rain and 3.6 days/yr with at least 50 mm. Heat adds 6.8 points, from 54.6 days/yr above 35 C. Wind adds 9.9 points, with 5 FEMA wind-type declarations over 20 years and 18.2 days/yr with gusts of 60 km/h or more. Winter adds only 3.5 points, and its score of 11.7 is low.",
+      "model": "claude-sonnet-5-5",
+      "answer": "Dallas's composite Weather Disruption Risk Score is 36.5, which is moderate, not high. It is only just above the 33 cutoff for moderate. It does rank 2nd of 14 in the network, so it is relatively exposed even though its absolute level is moderate. Flood and heavy rain contributes the most, at 16.3 composite points. That comes from 16.2 days/yr with at least 25 mm of rain and 3.6 days/yr with at least 50 mm. Wind adds 9.9 points, including 5 FEMA wind declarations over 20 years. Heat adds 6.8 points, from 54.6 days/yr at or above 35 C. Winter adds only 3.5 points.",
       "hubs": [
         "DFW"
       ],
@@ -83,7 +87,7 @@
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 7730,
+      "latency_ms": 7957,
       "grounding_warnings": []
     },
     {
@@ -94,16 +98,20 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "Chicago's flood score is 30.8, which is low and just under the moderate cutoff of 33. It ranked second among Midwest hubs in the earlier ranking, and that order against Minneapolis was a close call. The biggest driver is 7 FEMA flood/severe-storm declarations over 2006-2025, worth 18.7 of the 30.8 points. Rain adds less: 5.8 days/yr with at least 25 mm (10.1 points) and 0.4 days/yr with at least 50 mm (2.0 points). Chicago's composite score is 25.9, also low, and ranks 7 of 14 in the network.",
+      "model": "claude-sonnet-5-5",
+      "answer": "Chicago (CHI) ranks 2nd of 6 Midwest hubs for flood exposure. Its flood score is 30.8, which is low, and only just under the 33 moderate threshold. The main driver is FEMA flood, severe-storm and coastal-storm declarations: 7 over 20 years, worth 18.7 points. Next come 5.8 days/yr with at least 25 mm of rain (10.1 points) and 0.4 days/yr with at least 50 mm (2.0 points). Kansas City is well ahead at 44.6. Minneapolis is at 29.8, within 3 points of Chicago, so the order of Chicago and Minneapolis is not meaningful. Chicago's composite score is 25.9 (low, 7th of 14 in the network), and flood adds 9.2 points of it.",
       "hubs": [
-        "CHI"
+        "CHI",
+        "MSP",
+        "MCI"
       ],
       "tools": [
-        "get_hub_risk_breakdown"
+        "get_hub_risk_breakdown",
+        "rank_hubs"
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 7754,
+      "latency_ms": 8919,
       "grounding_warnings": []
     },
     {
@@ -113,7 +121,8 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "The top three hubs by composite Weather Disruption Risk Score are Houston (HOU) at 39.0, Dallas (DFW) at 36.5 and Newark (EWR) at 33.4. All three are only \"moderate\" in absolute terms (low is below 33, high is 66 or above). They rank at the top relative to the rest of the network, but none is high-risk. Houston's main drivers are 23.6 days/yr with at least 25 mm of rain and 8 FEMA wind declarations over 20 years. Dallas's are 16.2 heavy-rain days/yr and 54.6 days/yr above 35 C. Newark's are 7 FEMA wind declarations and 12.2 heavy-rain days/yr. Houston and Dallas are 2.5 points apart, so their order isn't meaningful. Dallas and Newark are 3.1 points apart, which is just over the 3-point close-call threshold, so that order is less certain than a clear gap.",
+      "model": "claude-sonnet-5-5",
+      "answer": "The three highest composite scores are Houston (39.0), Dallas (36.5) and Newark (33.4). All three are only \"moderate\" in absolute terms, because the high band starts at 66. They rank at the top only relative to the rest of the network. Houston's drivers are 23.6 days/yr with at least 25 mm of rain and 8 FEMA wind-type declarations over 20 years. Dallas is driven by 16.2 rain days (25 mm or more) and 54.6 days/yr above 35 C. Newark is driven by 7 FEMA wind declarations and 12.2 rain days (25 mm or more). Houston and Dallas are 2.5 points apart, which is within the 3-point close-call margin. Dallas and Newark are 3.1 points apart, which is just outside it, but the tool flags Newark as a close call with the next hub (the fourth ranked), so Newark's third place is also uncertain.",
       "hubs": [
         "HOU",
         "DFW",
@@ -124,7 +133,7 @@
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 7638,
+      "latency_ms": 7343,
       "grounding_warnings": []
     },
     {
@@ -134,13 +143,13 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "Miami has the highest hurricane/wind score in the network at 51.9, which is moderate. Newark is next at 43.3 and Houston at 43.1, both moderate. Dallas is moderate at 39.6, and Atlanta is low at 26.6. No hub reaches the high level (66 or above), so Miami is highest relative to the others, not high in absolute terms. Miami's score is driven mainly by 11 FEMA hurricane, tropical storm, tornado and wind declarations in 20 years and 11.8 days/yr with gusts of 60 km/h or more. Newark and Houston are a close call, so their order is not meaningful. Newark's score comes more from gusty days (20.4 days/yr at 60 km/h or more) than from declarations (7). Houston has 8 declarations and 10.8 gusty days/yr.",
+      "model": "claude-sonnet-5-5",
+      "answer": "Miami has the highest hurricane/wind score in the network at 51.9, which is moderate, not high. It is driven by 11.0 FEMA hurricane/tropical storm/tornado/wind declarations in 20 years and 11.8 days/yr with gusts of 60 km/h or more. Newark (43.3) and Houston (43.1) follow, and Dallas is at 39.6. All of these are moderate. Newark and Houston are within 3 points of each other, so their order is not meaningful. Atlanta (26.6) is low. Newark's score is driven more by frequent gusty days (20.4 days/yr at 60 km/h or more) than by hurricane declarations (7.0).",
       "hubs": [
         "MIA",
         "EWR",
         "HOU",
-        "DFW",
-        "ATL"
+        "DFW"
       ],
       "tools": [
         "rank_hubs",
@@ -148,7 +157,7 @@
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 8502,
+      "latency_ms": 8103,
       "grounding_warnings": []
     },
     {
@@ -158,19 +167,21 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "Phoenix (PHX) is the clear heat problem. It scores 100 out of 100 (high) with 137.4 days/yr at or above 35 C. Dallas (DFW) is a distant second at 45.5 (moderate) with 54.6 days/yr above 35 C. Houston (HOU, 22.3, 26.8 days/yr) and Denver (DEN, 14.8, 17.8 days/yr) are both low. Heat resilience investment should go to Phoenix first, then Dallas.",
+      "model": "claude-sonnet-5-5",
+      "answer": "Phoenix (PHX) is where extreme heat is the biggest problem. It scores 100 out of 100, which is high, and averages 137.4 days a year at or above 35 C. Dallas (DFW) is a distant second at 45.5 (moderate), with 54.6 days a year above 35 C. Houston (22.3, 26.8 days), Denver (14.8, 17.8 days) and Kansas City (10.0, 12.0 days) are all low.",
       "hubs": [
         "PHX",
         "DFW",
         "HOU",
-        "DEN"
+        "DEN",
+        "MCI"
       ],
       "tools": [
         "rank_hubs"
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 6333,
+      "latency_ms": 6618,
       "grounding_warnings": []
     },
     {
@@ -180,7 +191,8 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "Denver has the highest winter score of the three at 53.9, then Minneapolis at 48.2 and Chicago at 39.9. All three are 'moderate', not 'high'. Denver leads because it has 152.2 freeze days/yr, 22.4 days/yr with snowfall of 1 cm or more, and 1 FEMA winter declaration. Minneapolis has 146.4 freeze days/yr and 20.4 snow days/yr, with no FEMA winter declarations. Chicago has 103.6 freeze days/yr and 18.6 snow days/yr. Chicago is close to Detroit (37.4) in the network ranking, so the order of those two is not meaningful. On the composite score, which covers all hazards, all three hubs are 'low' (Denver 27.1, Chicago 25.9, Minneapolis 25.8).",
+      "model": "claude-sonnet-5-5",
+      "answer": "Denver has the highest winter score of the three at 53.9, then Minneapolis at 48.2 and Chicago at 39.9. All three are \"moderate\", so none is \"high\" in absolute terms. Denver leads on freeze days (152.2 days/yr at or below 0 C), days with snowfall of 1 cm or more (22.4 days/yr) and one FEMA winter declaration. Minneapolis has 146.4 freeze days, 20.4 snow days and no FEMA winter declarations. Chicago has 103.6 freeze days and 18.6 snow days. Denver and Minneapolis both average 1.2 days/yr with 10 cm or more of snow, against 0.6 for Chicago. Chicago is a close call with Detroit (37.4), so their order isn't meaningful. Composite scores are all low (Denver 27.1, Chicago 25.9, Minneapolis 25.8) and nearly identical.",
       "hubs": [
         "DEN",
         "MSP",
@@ -188,11 +200,12 @@
       ],
       "tools": [
         "compare_hubs",
+        "get_hub_risk_breakdown",
         "rank_hubs"
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 7659,
+      "latency_ms": 9934,
       "grounding_warnings": []
     },
     {
@@ -202,7 +215,8 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "Phoenix reached 35 C or more on 151 of 366 days in 2024, which is 41.3% of the year. 2024 was a leap year, so the denominator is 366 days. The data had no missing days.",
+      "model": "claude-sonnet-5-5",
+      "answer": "Phoenix reached 35 C or more on 151 of 366 days in 2024. That is 41.3% of the year. 2024 was a leap year, so the denominator is 366.",
       "hubs": [
         "PHX"
       ],
@@ -211,7 +225,7 @@
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 4584,
+      "latency_ms": 5034,
       "grounding_warnings": []
     },
     {
@@ -221,12 +235,12 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "No, that's not right. Phoenix's winter risk is low: a score of 0.3 out of 100, ranked 13th of 14 hubs. It has 0.0 days/yr with snowfall of 1 cm or more, 0.0 days/yr with 10 cm or more, 1.6 freeze days/yr, and 0 FEMA winter declarations in 20 years. Phoenix's real exposure is heat. Its heat score is 100 (high), with 137.4 days/yr above 35 C. Its composite score is 19.0 (low), which ranks 14th of 14. The hubs with the most winter exposure are Denver (53.9), Minneapolis (48.2) and Chicago (39.9), all moderate.",
+      "model": "claude-sonnet-5-5",
+      "answer": "No, that's not right. Phoenix's winter risk score is 0.3 out of 100, which is low. It ranks 13th of 14 hubs for winter, ahead of only Miami at 0.0. Phoenix has 0.0 days/yr with snowfall of 1 cm or more, 0.0 heavy-snow days, 1.6 freeze days/yr and 0 FEMA winter declarations. Phoenix's real exposure is heat: its heat score is 100 (high), with 137.4 days/yr at or above 35 C. For winter, Denver (53.9) and Minneapolis (48.2) are the most exposed hubs.",
       "hubs": [
         "PHX",
         "DEN",
-        "MSP",
-        "CHI"
+        "MSP"
       ],
       "tools": [
         "get_hub_risk_breakdown",
@@ -234,7 +248,7 @@
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 6866,
+      "latency_ms": 6760,
       "grounding_warnings": []
     },
     {
@@ -244,12 +258,13 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "Seattle is not one of our hubs, so I can't give you a winter-storm score for it. I haven't estimated one, because I only have data for the 14 network hubs. The closest network alternative in the West is Denver (DEN). For the Pacific Northwest there is no comparable hub. Denver would be the nearest western reference for winter exposure, and I can pull its winter score. I can also rank all hubs by winter risk.",
+      "model": "claude-sonnet-5-5",
+      "answer": "Seattle is not a hub in our network, so I can't give a winter storm score for it, and I won't guess. The network has 14 hubs: CHI, MSP, DTW, IND, MCI, CMH, MIA, HOU, DFW, ATL, MEM, DEN, PHX and EWR. The closest West-region options are Denver (DEN) and Phoenix (PHX). Neither is close to Seattle's climate. I can rank all hubs on winter risk or pull the breakdown for any of them.",
       "hubs": [],
       "tools": [],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 4097,
+      "latency_ms": 4666,
       "grounding_warnings": []
     },
     {
@@ -259,12 +274,13 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "I can't help with stock picks. I only cover weather and hazard risk for your distribution hubs. I can rank hubs by winter, wind, flood, heat or composite risk, compare hubs, explain a hub's score, report weather stats such as days of snowfall or heat, and check live NWS alerts.",
+      "model": "claude-sonnet-5-5",
+      "answer": "I can't help with stock picks. I only cover weather and hazard risk for your 14 US distribution hubs. That includes winter, wind, flood and heat exposure, composite risk rankings, and current NWS alerts. If you'd like, I can rank the hubs by weather risk to help you decide where to put resilience investment.",
       "hubs": [],
       "tools": [],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 2761,
+      "latency_ms": 2886,
       "grounding_warnings": []
     },
     {
@@ -274,7 +290,8 @@
       ],
       "pass": true,
       "failures": [],
-      "answer": "No NWS watches, warnings or advisories are active at the Miami hub (MIA). The live feed was fetched 2026-11-15 10:43 UTC and isn't stale. Live alerts show current conditions only. They don't change the hub's historical risk scores.",
+      "model": "claude-sonnet-5-5",
+      "answer": "No NWS watches, warnings or advisories are active at the Miami hub (MIA). The live feed was fetched 2026-11-15 11:02 UTC and is not stale. Live alerts show current conditions only. They don't change Miami's historical risk scores.",
       "hubs": [
         "MIA"
       ],
@@ -283,7 +300,7 @@
       ],
       "retries": 0,
       "validation_errors": [],
-      "latency_ms": 4694,
+      "latency_ms": 5408,
       "grounding_warnings": []
     }
   ]

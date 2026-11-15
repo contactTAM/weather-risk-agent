@@ -4,7 +4,7 @@ An AI agent that helps logistics analysts decide which US distribution hubs are 
 
 **The numbers come from code; the agent explains them.** Public weather and disaster data are cached in SQLite and turned into deterministic, unit-tested hazard scores. Claude picks which scoring tool to call, then writes a structured, schema-validated explanation that cites the data, states its assumptions and flags uncertainty.
 
-**Live demo:** https://weather-risk-agent-ae3s.onrender.com (an access code is required to chat; it's shared with reviewers separately. The free tier sleeps when idle, so the first load can take about a minute.)
+**Live demo:** https://weather-risk-agent-ae3s.onrender.com (an access code is required to chat; the access code is in the submission email. The free tier sleeps when idle, so the first load can take about a minute.)
 
 ![Chat UI](docs/img/ui.png)
 
@@ -47,7 +47,7 @@ You can also click a hub on the network board to ask why it scores where it does
 | Unit tests (47, no network, no LLM) | `uv run pytest` |
 | Evaluation set (14 cases, live LLM, about $0.50–1 per run) | `uv run python -m evals.run` |
 | Evals for some cases only, or against a running server | `uv run python -m evals.run --case dallas_why --api http://localhost:8000` |
-| Evals against the protected deploy | `EVAL_ACCESS_CODE=... uv run python -m evals.run --api https://weather-risk-agent-ae3s.onrender.com` |
+| Evals against the protected deploy (the rate limit of 20 chats per 10 minutes allows one full run per 10 minutes) | `EVAL_ACCESS_CODE=... uv run python -m evals.run --api https://weather-risk-agent-ae3s.onrender.com` |
 | Refresh public data | `uv run python -m app.data.refresh [--force] [--hub DEN]` |
 | Ask one question from the CLI | `uv run python -m app.agent "Why is Dallas high?"` |
 | Run the alert check once | `curl -X POST localhost:8000/alerts/check` |

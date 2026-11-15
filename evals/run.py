@@ -115,11 +115,22 @@ def run_case(case: dict, api: str | None) -> dict:
         fails = [f"exception: {type(e).__name__}: {e}"]
     meta = ans.get("meta", {})
     return {"id": case["id"], "turns": case["turns"], "pass": not fails, "failures": fails,
+            "model": meta.get("model"),
             "answer": ans.get("answer"), "hubs": [h["hub_id"] for h in ans.get("hubs", [])],
             "tools": [t["name"] for t in meta.get("tools_called", [])],
             "retries": meta.get("validation_retries", 0), "validation_errors": meta.get("validation_errors", []),
             "latency_ms": meta.get("latency_ms"),
             "grounding_warnings": meta.get("grounding_warnings", [])}
+
+
+def _served_model(api: str | None) -> str | None:
+    """Model the agent runs on: from env in-process, from the server's /health in --api mode."""
+    if not api:
+        return agent.llm_model()
+    try:
+        return httpx.get(f"{api.rstrip('/')}/health", timeout=90).json().get("model")
+    except Exception:
+        return None  # unreachable /health; per-case meta.model still records the answering model
 
 
 def main() -> int:
@@ -151,7 +162,7 @@ def main() -> int:
 
     out = ROOT / "results" / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
     out.write_text(json.dumps({"passed": passed, "total": len(results), "api": args.api,
-                               "model": agent.llm_model() if not args.api else None,
+                               "model": _served_model(args.api),
                                "results": results}, indent=2))
     print(f"saved {out.relative_to(ROOT.parent)}")
     return 0 if passed == len(results) else 1
