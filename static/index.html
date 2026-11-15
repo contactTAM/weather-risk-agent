@@ -1,1 +1,72 @@
-<!doctype html><title>placeholder</title>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hub Weather Risk Desk</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' width='5' height='16' fill='%23d4481f'/%3E%3Crect x='9' width='3' height='16' fill='%231d1f1c'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="masthead">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <div>
+      <h1>Hub Weather Risk Desk</h1>
+      <p class="sub">Exposure briefing for 14 distribution hubs · deterministic scores, explained by an agent</p>
+    </div>
+  </div>
+  <div class="head-actions">
+    <span id="status" class="status">checking data…</span>
+    <button id="newSession" class="ghost" title="Start a new conversation">New session</button>
+  </div>
+</header>
+
+<main class="desk">
+  <section class="chat" aria-label="Conversation">
+    <div id="log" class="log" aria-live="polite">
+      <div class="intro">
+        <p class="kicker">Ask about exposure, comparisons, statistics or causes</p>
+        <div class="starters">
+          <button class="chip">Which hubs in the Midwest are most exposed to winter disruption?</button>
+          <button class="chip">Compare Miami and Houston in terms of hurricane and flood exposure.</button>
+          <button class="chip">What percentage of days in Denver last year had snowfall?</button>
+          <button class="chip">Why is the Dallas hub's weather disruption risk high?</button>
+        </div>
+      </div>
+    </div>
+    <form id="composer" class="composer" autocomplete="off">
+      <button type="button" id="mic" class="icon" title="Speak your question" aria-label="Speak your question">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+      </button>
+      <input id="msg" name="msg" placeholder="Ask about hub weather exposure…" maxlength="2000" required>
+      <label class="speak" title="Read answers aloud"><input type="checkbox" id="speak"> read aloud</label>
+      <button type="submit" id="send">Ask</button>
+    </form>
+  </section>
+
+  <aside class="board" aria-label="Network board">
+    <div class="board-head">
+      <h2>Network board</h2>
+      <p class="sub">2021–2025 baseline · FEMA 2006–2025</p>
+    </div>
+    <div class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-h="composite" class="on">Overall</button>
+      <button role="tab" data-h="winter">Winter</button>
+      <button role="tab" data-h="wind">Wind</button>
+      <button role="tab" data-h="flood">Flood</button>
+      <button role="tab" data-h="heat">Heat</button>
+    </div>
+    <ol id="board" class="board-list"></ol>
+    <p class="legend"><span class="lv low"></span>low &lt;33 <span class="lv moderate"></span>moderate &lt;66 <span class="lv high"></span>high · <span class="cc">≈</span> close call</p>
+    <p class="fine">Scores are computed by code from Open-Meteo reanalysis and OpenFEMA county declarations. The agent explains them; it never sets them.</p>
+  </aside>
+</main>
+
+<template id="tpl-user"><div class="msg user"><p></p></div></template>
+<script src="/static/app.js"></script>
+</body>
+</html>
