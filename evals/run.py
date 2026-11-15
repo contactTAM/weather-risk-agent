@@ -125,6 +125,8 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=4)
     args = ap.parse_args()
 
+    from app.data.seed import ensure_db
+    ensure_db()
     cases = yaml.safe_load((ROOT / "cases.yaml").read_text())["cases"]
     if args.case:
         cases = [c for c in cases if c["id"] in args.case]

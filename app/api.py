@@ -22,6 +22,8 @@ _refresh_state: dict = {"running": False, "last_report": None}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     llm_model()  # fail fast with a clear message if LLM_MODEL is not configured
+    from app.data.seed import ensure_db
+    ensure_db()  # fresh clone / cloud deploy: restore the shipped data snapshot
     from app import alerts
     alerts.start_scheduler()
     yield

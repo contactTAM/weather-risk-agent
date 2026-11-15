@@ -84,3 +84,14 @@ def test_http_retries_after_rate_limit(monkeypatch):
     respx.get("https://x.test/a").mock(side_effect=[
         httpx.Response(429, headers={"Retry-After": "1"}), httpx.Response(200, json={"ok": 1})])
     assert http.get_json("https://x.test/a") == {"ok": 1}
+
+
+def test_seed_restores_empty_db(tmp_db):
+    from app.data.seed import SEED, ensure_db
+    if not SEED.exists():
+        import pytest; pytest.skip("no seed built")
+    assert ensure_db() == "restored from seed"
+    with connect() as c:
+        assert c.execute("SELECT count(*) FROM weather_meta").fetchone()[0] == 14
+        assert c.execute("SELECT count(*) FROM messages").fetchone()[0] == 0
+    assert ensure_db() == "existing"
