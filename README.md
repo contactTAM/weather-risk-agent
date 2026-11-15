@@ -44,13 +44,14 @@ You can also click a hub on the network board to ask why it scores where it does
 | What | Command |
 |---|---|
 | Run the API and UI | `uv run uvicorn app.api:app --port 8000` |
-| Unit tests (50, no network, no LLM) | `uv run pytest` |
+| Unit tests (71, no network, no LLM; +3 Postgres-only with `TEST_DATABASE_URL`) | `uv run pytest` |
 | Evaluation set (19 cases, live LLM, about $0.70–1.20 per run) | `uv run python -m evals.run` |
 | Evals for some cases only, or against a running server | `uv run python -m evals.run --case dallas_why --api http://localhost:8000` |
 | Evals against the protected deploy, paced under its limit of 20 chats per 10 minutes | `EVAL_ACCESS_CODE=... uv run python -m evals.run --api https://weather-risk-agent-ae3s.onrender.com --rate-limit 18` |
 | Refresh public data | `uv run python -m app.data.refresh [--force] [--hub DEN]` |
 | Ask one question from the CLI | `uv run python -m app.agent "Why is Dallas high?"` |
-| Run the alert check once | `curl -X POST localhost:8000/alerts/check` |
+| Refresh, then compare, in one call | `curl -X POST localhost:8000/alerts/run` (then `GET /alerts/run`) |
+| Alert state and data freshness | `curl localhost:8000/alerts/status` |
 
 ## API
 
@@ -60,7 +61,8 @@ You can also click a hub on the network board to ask why it scores where it does
 | `GET /scores?hazard=composite\|winter\|wind\|flood\|heat&region=&top_n=` | Deterministic ranking with drivers and close-call flags |
 | `GET /hubs?region=` · `GET /hubs/{id}/breakdown` · `GET /hubs/{id}/alerts` | Hub list, full score breakdown, live NWS alerts |
 | `POST /refresh` · `GET /refresh` | Background data refresh and its status |
-| `POST /alerts/check?dry_run=` · `GET /alerts` · `POST /alerts/echo` | Risk-change alerts, alert log, local test webhook |
+| `POST /alerts/check?dry_run=` · `POST\|GET /alerts/run` | Compare with the durable snapshot (409 if data not refreshed in 12 h) · refresh + compare in one call |
+| `GET /alerts/status` · `GET /alerts` · `POST /alerts/echo` | State backend, last snapshot, data freshness · alert log · local test webhook |
 | `GET /health` | Data and model status |
 
 A `/chat` response has these fields: `in_scope`, `answer`, `hubs[{hub_id, city, region, hazard, score, level, rank, of}]`, `focus_hazard`, `reasoning_steps[]`, `data_used[{source, period}]`, `assumptions[]`, `uncertainty{level, note}`, `follow_up_suggestions[]`, and `meta{model, steps, tools_called[], validation_retries, validation_errors[], grounding_warnings[], latency_ms, error}`. The code fills in the scores in `hubs`, never the LLM.
@@ -73,11 +75,15 @@ A `/chat` response has these fields: `in_scope`, `answer`, `hubs[{hub_id, city, 
 | `LLM_MODEL` | (required) | Model ID, e.g. `claude-sonnet-5-5` |
 | `LLM_EFFORT` | `medium` | Model effort level |
 | `LLM_FALLBACKS` | `default` | Server-side refusal fallback; `off` disables it |
-| `DB_PATH` | `data/cache.sqlite` | SQLite file |
+| `DB_PATH` | `data/cache.sqlite` | SQLite data cache (and the state, when `DATABASE_URL` is empty) |
+| `DATABASE_URL` | (none) | Postgres URL for durable state (snapshots, alert log, chat memory), e.g. Neon. Empty: local SQLite |
 | `ACCESS_CODE` | (none) | When set, required on `/chat`, `/refresh` and `/alerts/check` (public deploys) |
 | `CHAT_RATE_LIMIT` / `CHAT_RATE_WINDOW_S` | `20` / `600` | `/chat` requests per IP per window; `0` disables |
 | `ALERT_WEBHOOK_URL` | (none) | Where alert JSON is POSTed (try `http://localhost:8000/alerts/echo`) |
-| `ALERT_SCHEDULE_HOURS` | `6` | Alert job interval; `0` disables it |
+| `ALERT_SCHEDULE_HOURS` | `0` | In-process refresh + check interval (opt-in fallback for always-on hosts) |
+| `ALERT_MAX_DATA_AGE_H` | `12` | Alert check refuses (409) if the cache wasn't refreshed this recently |
+| `ALERT_WEBHOOK_FORMAT` | `auto` | `auto` (Slack text for hooks.slack.com), `json` or `slack` |
+| `ANALYSIS_END_YEAR` / `WINDOW_ROLL_DAY` | (today) / `15` | Pin the rolling window's last full year; day in January the window rolls |
 | `ALERT_SCORE_DELTA` | `5` | Score change, in points, that triggers an alert (a level change always does) |
 | `SCORING_CONFIG` | `config/scoring.yaml` | Alternative weights and anchors for what-if runs |
 | `NWS_USER_AGENT` | `weather-risk-agent (demo)` | The NWS API requires a User-Agent |
@@ -94,6 +100,13 @@ Protection for a public URL: `/chat`, `/refresh` and `/alerts/check` require the
 
 Locally with Docker: `docker build -t weather-risk-agent . && docker run -p 8000:8000 --env-file .env weather-risk-agent`
 
+## Scheduled alerts (free tier: Render + Neon + GitHub Actions)
+
+1. **Neon** (free): create a project in region *AWS US West 2 (Oregon)*, then copy the **pooled** connection string.
+2. **Render → service → Environment:** set `DATABASE_URL` to that string and `ALERT_SCHEDULE_HOURS=0`, then save (it redeploys). `/health` should show `"state_backend": "postgres"`.
+3. **GitHub → repo → Settings → Secrets and variables → Actions:** add the secret `ACCESS_CODE` (same as on Render) and the variable `APP_URL` = the service URL. The workflow `.github/workflows/alert-check.yml` then runs every 6 hours; start it by hand from the **Actions** tab ("alert-check" → "Run workflow").
+4. **Slack** (optional): at api.slack.com/apps, choose *Create New App* → *From scratch*, then *Incoming Webhooks* → *Activate* → *Add New Webhook to Workspace* → pick a channel, and copy the `https://hooks.slack.com/services/...` URL into `ALERT_WEBHOOK_URL` on Render. With `ALERT_WEBHOOK_FORMAT=auto`, alerts arrive as one-line messages with the top drivers.
+
 ## Repository layout
 
 ```
@@ -104,7 +117,8 @@ app/
   scoring.py      deterministic scoring: anchors, weights, ranks, breakdowns (pure functions)
   metrics.py      daily rows -> yearly indicator counts; weather statistics
   schemas.py      LLM answer schema, API response schema
-  alerts.py       risk-change and NWS alerts, scheduler, webhook
+  alerts.py       refresh-then-compare alerts (scores + NWS), freshness guard, webhook / Slack
+  state.py        durable state: Postgres (DATABASE_URL) or SQLite: snapshots, alert log, chat memory
   db.py config.py SQLite schema, settings, hub loader
   data/           open_meteo.py fema.py nws.py refresh.py seed.py http.py
 config/scoring.yaml   weights, anchors, levels (documented)

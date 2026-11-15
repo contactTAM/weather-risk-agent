@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -83,11 +84,25 @@ class _Conn:
             self.raw.executemany(sql, rows)
 
 
-def _init_sqlite(conn: sqlite3.Connection) -> None:
-    conn.executescript(_SQLITE_DDL)
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(alerts)")}
-    if "ref" not in cols:  # migration for caches created before the ref column existed
-        conn.execute("ALTER TABLE alerts ADD COLUMN ref TEXT")
+_init_lock = threading.Lock()
+
+
+def _init_sqlite(conn: sqlite3.Connection, key: str) -> None:
+    """Create/migrate once per database file. Under a lock: parallel first requests used to race on
+    the ALTER below ('duplicate column name: ref', found by the parallel eval run)."""
+    with _init_lock:
+        if key in _initialised:
+            return
+        conn.executescript(_SQLITE_DDL)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(alerts)")}
+        if "ref" not in cols:  # migration for caches created before the ref column existed
+            try:
+                conn.execute("ALTER TABLE alerts ADD COLUMN ref TEXT")
+            except sqlite3.OperationalError as e:  # another process migrated it first
+                if "duplicate column" not in str(e):
+                    raise
+        conn.commit()
+        _initialised.add(key)
 
 
 @contextmanager
@@ -99,11 +114,13 @@ def connect() -> Iterator[_Conn]:
         url = os.environ["DATABASE_URL"].strip()
         raw = psycopg.connect(url, row_factory=dict_row, connect_timeout=15)
         try:
-            if url not in _initialised:
-                with raw.cursor() as cur:
-                    for stmt in _PG_DDL:
-                        cur.execute(stmt)
-                _initialised.add(url)
+            with _init_lock:
+                if url not in _initialised:
+                    with raw.cursor() as cur:
+                        for stmt in _PG_DDL:
+                            cur.execute(stmt)
+                    raw.commit()
+                    _initialised.add(url)
             yield _Conn(raw, kind)
             raw.commit()
         finally:
@@ -115,7 +132,7 @@ def connect() -> Iterator[_Conn]:
         raw = sqlite3.connect(path)
         raw.row_factory = sqlite3.Row
         try:
-            _init_sqlite(raw)
+            _init_sqlite(raw, f"sqlite:{path}")
             yield _Conn(raw, kind)
             raw.commit()
         finally:

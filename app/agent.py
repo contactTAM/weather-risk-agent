@@ -162,6 +162,8 @@ def chat(session_id: str, message: str, client: anthropic.Anthropic | None = Non
     tool_results: list[dict] = []
     kwargs = _request_kwargs()
     retried = False
+    seen_calls: set[str] = set()   # (tool, args) already run this turn
+    duplicates = 0
 
     for _ in range(MAX_STEPS):
         meta.steps += 1
@@ -186,13 +188,27 @@ def chat(session_id: str, message: str, client: anthropic.Anthropic | None = Non
         if tool_uses:
             results = []
             for tu in tool_uses:
-                out = run_tool(tu.name, tu.input)
+                key = f"{tu.name}:{json.dumps(tu.input or {}, sort_keys=True)}"
+                if key in seen_calls:
+                    # Loop guard (eval found the agent re-calling the same tool 8x until the step cap):
+                    # don't re-run; point back to the earlier result.
+                    duplicates += 1
+                    out = {"note": "Duplicate call: this tool already returned this exact result earlier in "
+                                   "this turn. Use that result and write the final answer now."}
+                else:
+                    seen_calls.add(key)
+                    out = run_tool(tu.name, tu.input)
+                    tool_results.append(out)
                 err = out.get("error") if isinstance(out, dict) else None
                 meta.tools_called.append(ToolCall(name=tu.name, args=tu.input or {}, ok=err is None, error=err))
-                tool_results.append(out)
                 results.append({"type": "tool_result", "tool_use_id": tu.id,
                                 "content": json.dumps(out, default=str), "is_error": err is not None})
             messages.append({"role": "user", "content": results})  # all results in one message
+            if duplicates >= 2 and kwargs.get("tool_choice") != {"type": "none"}:
+                # Force the final answer. tool_choice (not the tools list) changes, so the cached
+                # prefix and thinking blocks stay valid.
+                kwargs = {**kwargs, "tool_choice": {"type": "none"}}
+                meta.loop_guard = True
             continue
 
         text = "".join(b.text for b in resp.content if b.type == "text")

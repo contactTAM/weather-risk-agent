@@ -126,3 +126,15 @@ def test_grounding_flags_injected_integer_score():
     # 99 = 100 - 1.0 used to pass via the difference rule (found by the prompt_injection eval)
     tr = [{"composite": 22.7, "scale_max": 100.0, "fema": 1.0}]
     assert agent.ungrounded_numbers("I can't say Miami scores 99; it is 22.7.", tr) == ["99"]
+
+
+def test_repeated_identical_tool_calls_are_not_rerun_and_force_an_answer(monkeypatch):
+    runs = []
+    real = agent.run_tool
+    monkeypatch.setattr(agent, "run_tool", lambda n, a: runs.append(n) or real(n, a))
+    same = lambda i: resp(tool_block("get_hub_risk_breakdown", {"hub_id": "MIA"}, id_=f"tu_{i}"), stop="tool_use")
+    c = FakeClient([same(1), same(2), same(3), resp(text_block(dict(GOOD, hub_ids=["MIA"])))])
+    a = agent.chat("loop", "Why is Miami only moderate?", client=c)
+    assert a.meta.error is None and runs == ["get_hub_risk_breakdown"]       # executed once
+    assert a.meta.loop_guard and c.calls[-1]["tool_choice"] == {"type": "none"}
+    assert "Duplicate call" in c.calls[2]["messages"][-1]["content"][0]["content"]

@@ -54,6 +54,14 @@ Data layer (app/data/*.py): fetchers → SQLite cache (raw_responses, daily_weat
 - **Grounding checks.** Every number in the answer text must appear in a tool result or the system prompt (within rounding), and every hub ID must have come back from a tool. Violations are reported in `meta.grounding_warnings` and used by the evals.
 - **"Had snowfall"** = any measurable snowfall (≥ 0.1 cm), for the % question. The winter score uses ≥ 1 cm days. The stat tool returns both.
 
+### Changes after approval, round 2: real score-change alerts on the free tier (approved 2026-11-15)
+- **Rolling window:** the last 5 full calendar years (FEMA: the last 20), rolling on **Jan 15** because Open-Meteo's archive lags a few days. `ANALYSIS_END_YEAR` pins it, and tests pin 2025. Eval years became `{Y}` templates. The board header and the system prompt had hardcoded periods; both now come from the window.
+- **Durable state:** score snapshots, the alert log and chat memory moved to `app/state.py`: **Postgres via `DATABASE_URL` (Neon free tier)**, with a SQLite fallback. The weather and FEMA cache stays in SQLite, because the seed plus a refresh can rebuild it. Neon was chosen over Render Postgres (expires after 30 days), Supabase (pauses after a week; the owner's production account) and Turso (less common client).
+- **Refresh, then compare:** a refresh log plus a **409 freshness guard** on `/alerts/check`, so seed data restored after a restart is never compared with a newer snapshot. `POST /alerts/run` and `GET /alerts/status` were added, and a background refresh starts on startup when the window moved.
+- **Scheduler:** a GitHub Actions cron every 6 h (wake, refresh, wait for *this* refresh, compare). APScheduler is now off by default (`ALERT_SCHEDULE_HOURS=0`), because a sleeping instance makes it unreliable.
+- **Slack:** `ALERT_WEBHOOK_FORMAT=auto` sends `{text}` to `hooks.slack.com` URLs.
+- **UI:** the close-call legend now says "within N points of the next-ranked hub", with a tooltip per mark.
+
 ## Hubs (`data/hubs.yaml`)
 Midwest: Chicago (Cook 17031), Minneapolis (Hennepin 27053), Detroit (Wayne 26163), Indianapolis (Marion 18097), Kansas City (Jackson MO 29095), Columbus (Franklin OH 39049).
 Others: Miami (Miami-Dade 12086, South), Houston (Harris 48201, South), Dallas (Dallas 48113, South), Atlanta (Fulton 13121, South), Memphis (Shelby 47157, South), Denver (Denver 08031, West), Phoenix (Maricopa 04013, West), Newark (Essex 34013, Northeast). Regions follow the US Census regions.

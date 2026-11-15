@@ -103,3 +103,17 @@ def test_postgres_path_with_fake_driver(monkeypatch):
     insert = next(s for s in sqls if s.startswith("INSERT INTO scores_snapshot"))
     assert "%s" in insert and "?" not in insert
     assert sqls[-1] == "COMMIT"
+
+
+def test_sqlite_migration_is_safe_under_parallel_first_use(tmp_db):
+    """An old cache (alerts without 'ref') hit by parallel first requests must not fail."""
+    import sqlite3
+    from concurrent.futures import ThreadPoolExecutor
+    c = sqlite3.connect(tmp_db)
+    c.execute("CREATE TABLE alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, hub_id TEXT NOT NULL,"
+              " kind TEXT NOT NULL, payload TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0, delivery_error TEXT)")
+    c.commit(); c.close()
+    state._initialised.clear()
+    with ThreadPoolExecutor(8) as ex:
+        results = list(ex.map(lambda i: state.nws_alert_seen("ATL", f"x{i}"), range(16)))
+    assert results == [False] * 16

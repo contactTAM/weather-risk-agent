@@ -117,6 +117,7 @@ class ChatMeta(BaseModel):
     tools_called: list[ToolCall] = []
     validation_retries: int = 0
     validation_errors: list[str] = []
+    loop_guard: bool = False
     grounding_warnings: list[str] = []
     latency_ms: int = 0
     error: str | None = None
