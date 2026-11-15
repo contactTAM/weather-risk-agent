@@ -54,3 +54,22 @@ def test_dry_run_writes_nothing(seeded, monkeypatch):  # noqa: F811
     alerts.check(dry_run=True)
     from app import state
     assert state.status()["snapshots_total_rows"] == 0
+
+
+@respx.mock
+def test_slack_webhook_gets_text_other_urls_get_json(monkeypatch):
+    payload = {"type": "score_change", "hub_id": "PHX", "city": "Phoenix", "hazard": "composite",
+               "old_score": 19.0, "new_score": 34.0, "delta": 15.0, "old_level": "low", "new_level": "moderate",
+               "level_changed": True, "drivers": [{"label": "Days with max temp >= 35 C", "value": 137.4, "unit": "days/yr"}]}
+    slack = respx.post("https://hooks.slack.com/services/T/B/x").mock(return_value=httpx.Response(200, text="ok"))
+    other = respx.post("https://example.test/hook").mock(return_value=httpx.Response(200))
+    monkeypatch.setenv("ALERT_WEBHOOK_URL", "https://hooks.slack.com/services/T/B/x")
+    assert alerts._deliver(payload) == (True, None)
+    body = json.loads(slack.calls[0].request.content)
+    assert set(body) == {"text"} and "Phoenix" in body["text"] and "19.0 -> 34.0" in body["text"] and "low -> moderate" in body["text"]
+    monkeypatch.setenv("ALERT_WEBHOOK_URL", "https://example.test/hook")
+    alerts._deliver(payload)
+    assert json.loads(other.calls[0].request.content)["new_score"] == 34.0      # raw JSON unchanged
+    nws_text = alerts.slack_text({"type": "nws_alert", "city": "Atlanta",
+                                  "nws": {"severity": "Severe", "event": "Freeze Warning", "headline": "until 9 AM"}})
+    assert "Freeze Warning" in nws_text and "Atlanta" in nws_text

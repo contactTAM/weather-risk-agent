@@ -44,12 +44,31 @@ def score_changes(prev: dict, current: dict, threshold: float) -> list[dict]:
     return events
 
 
+def slack_text(payload: dict) -> str:
+    """One readable line for Slack (incoming webhooks need `text`; they reject arbitrary JSON)."""
+    if payload.get("type") == "nws_alert":
+        n = payload.get("nws", {})
+        return f":cloud_with_lightning: NWS {n.get('severity')} *{n.get('event')}* at the {payload.get('city')} hub. {n.get('headline') or ''}".strip()
+    lvl = (f", {payload['old_level']} -> {payload['new_level']}" if payload.get("level_changed") else "")
+    drivers = "; ".join(f"{d['label']}: {d['value']} {d['unit']}" for d in payload.get("drivers", [])[:3])
+    return (f":warning: *{payload.get('city')} ({payload.get('hub_id')})* {payload.get('hazard')} risk "
+            f"{payload.get('old_score')} -> {payload.get('new_score')} ({payload.get('delta'):+.1f}{lvl}). "
+            f"Top drivers: {drivers}")
+
+
+def _webhook_body(url: str, payload: dict) -> dict:
+    fmt = os.getenv("ALERT_WEBHOOK_FORMAT", "auto").lower()
+    if fmt == "slack" or (fmt == "auto" and url.startswith("https://hooks.slack.com/")):
+        return {"text": slack_text(payload)}
+    return payload
+
+
 def _deliver(payload: dict) -> tuple[bool, str | None]:
     url = os.getenv("ALERT_WEBHOOK_URL")
     if not url:
         return False, "ALERT_WEBHOOK_URL not set (logged only)"
     try:
-        r = httpx.post(url, json=payload, timeout=10)
+        r = httpx.post(url, json=_webhook_body(url, payload), timeout=10)
         r.raise_for_status()
         return True, None
     except Exception as e:

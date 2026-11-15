@@ -16,10 +16,16 @@ services:
         sync: false          # required on /chat, /refresh, /alerts/check
       - key: LLM_EFFORT
         value: medium
+      - key: DATABASE_URL
+        sync: false          # Neon (free) Postgres: score snapshots, alert log, chat memory survive restarts
       - key: ALERT_SCHEDULE_HOURS
-        value: "6"
+        value: "0"           # off: GitHub Actions (.github/workflows/alert-check.yml) schedules refresh + check
+      - key: ALERT_MAX_DATA_AGE_H
+        value: "12"
+      - key: ALERT_WEBHOOK_FORMAT
+        value: auto          # Slack text when the URL is hooks.slack.com, raw JSON otherwise
       - key: ALERT_WEBHOOK_URL
-        sync: false          # optional
+        sync: false          # optional, e.g. a Slack incoming webhook
       - key: CHAT_RATE_LIMIT
         value: "20"
       - key: NWS_USER_AGENT

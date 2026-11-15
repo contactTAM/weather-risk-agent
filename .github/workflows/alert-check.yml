@@ -1,0 +1,83 @@
+# Scheduled data refresh + score-change alert check for the deployed app.
+# Why GitHub Actions: Render's free instance sleeps when idle, so an in-process scheduler can't be
+# relied on. This external cron wakes the service, refreshes data, then compares with the durable
+# snapshot (Postgres). Setup: repo variable APP_URL, repo secret ACCESS_CODE (see README).
+name: alert-check
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"     # every 6 hours (GitHub may start scheduled runs a few minutes late)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Re-fetch weather even if the cached window is current"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alert-check
+  cancel-in-progress: false
+
+jobs:
+  refresh-and-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_URL: ${{ vars.APP_URL }}
+      ACCESS_CODE: ${{ secrets.ACCESS_CODE }}
+      FORCE: ${{ inputs.force || false }}
+    steps:
+      - name: Check configuration
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$ACCESS_CODE" ]; then
+            echo "::error::Set repository variable APP_URL and secret ACCESS_CODE (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+      - name: Wake the service (free tier sleeps when idle)
+        run: |
+          for i in $(seq 1 18); do
+            if curl -fsS -m 60 "$APP_URL/health" -o health.json; then
+              jq '{status, commit, state_backend, hubs_with_weather}' health.json; exit 0
+            fi
+            echo "not awake yet ($i/18)"; sleep 10
+          done
+          echo "::error::Service did not wake up"; exit 1
+
+      - name: Refresh data
+        run: |
+          get() { curl -fsS -m 60 "$APP_URL/refresh"; }
+          # wait out a refresh that is already running (e.g. the startup refresh)
+          for i in $(seq 1 90); do [ "$(get | jq -r .running)" = "false" ] && break; sleep 10; done
+          T0=$(date -u +%Y-%m-%dT%H:%M:%S+00:00)
+          curl -fsS -m 60 -X POST -H "X-Access-Code: $ACCESS_CODE" "$APP_URL/refresh?force=$FORCE" | jq .
+          # wait until a refresh that started after T0 has finished (avoids reading the previous result)
+          for i in $(seq 1 90); do
+            r=$(get)
+            if [ "$(echo "$r" | jq -r .running)" = "false" ] && [[ "$(echo "$r" | jq -r '.last.started_at // ""')" > "$T0" || "$(echo "$r" | jq -r '.last.started_at // ""')" == "$T0" ]]; then
+              break
+            fi
+            sleep 10
+          done
+          echo "$r" | jq '.last | {ok, window, started_at, finished_at}'
+          if [ "$(echo "$r" | jq -r .last.ok)" != "true" ]; then
+            echo "::error::Refresh failed; skipping the comparison so no alerts come from stale data."
+            echo "$r" | jq '.last.report[]? | select(.weather_error or .fema_error)'
+            exit 1
+          fi
+
+      - name: Compare scores and send alerts
+        run: |
+          curl -fsS -m 120 -X POST -H "X-Access-Code: $ACCESS_CODE" "$APP_URL/alerts/check" -o check.json
+          jq '{checked_at, previous_snapshot_at, baseline, score_changes, nws_alerts}' check.json
+          {
+            echo "### Alert check $(jq -r .checked_at check.json)"
+            echo "- previous snapshot: $(jq -r '.previous_snapshot_at // "none (baseline)"' check.json)"
+            echo "- score changes: $(jq -r .score_changes check.json), new NWS alerts: $(jq -r .nws_alerts check.json)"
+            jq -r '.events[] | if .type == "score_change"
+                   then "- \(.city) \(.hazard): \(.old_score) -> \(.new_score) (\(.old_level) -> \(.new_level))"
+                   else "- NWS \(.nws.severity) \(.nws.event) at \(.city)" end' check.json
+          } >> "$GITHUB_STEP_SUMMARY"
