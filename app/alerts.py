@@ -9,7 +9,6 @@ Each alert is logged in the `alerts` table and POSTed as JSON to ALERT_WEBHOOK_U
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 
@@ -18,7 +17,8 @@ import httpx
 from app import tools
 from app.config import load_hubs
 from app.data import nws
-from app.db import connect, now_iso
+from app import state
+from app.db import now_iso
 from app.scoring import COMPOSITE, HAZARDS, top_drivers
 
 log = logging.getLogger("alerts")
@@ -27,14 +27,6 @@ _scheduler = None
 
 def _delta_threshold() -> float:
     return float(os.getenv("ALERT_SCORE_DELTA", "5"))
-
-
-def _last_snapshot(conn) -> dict[tuple[str, str], tuple[float, str]]:
-    row = conn.execute("SELECT max(computed_at) FROM scores_snapshot").fetchone()
-    if not row or not row[0]:
-        return {}
-    return {(r["hub_id"], r["hazard"]): (r["score"], r["level"]) for r in conn.execute(
-        "SELECT hub_id, hazard, score, level FROM scores_snapshot WHERE computed_at=?", (row[0],))}
 
 
 def score_changes(prev: dict, current: dict, threshold: float) -> list[dict]:
@@ -64,45 +56,44 @@ def _deliver(payload: dict) -> tuple[bool, str | None]:
         return False, str(e)[:300]
 
 
+def current_scores() -> tuple[dict, dict]:
+    """(scores by hub, {(hub, hazard): (score, level)}) recomputed from the cache with the current config."""
+    scores = tools.all_scores(force=True)
+    current = {}
+    for hid, s_ in scores.items():
+        current[(hid, COMPOSITE)] = (s_.composite, s_.level)
+        for hz in HAZARDS:
+            current[(hid, hz)] = (s_.hazards[hz].score, s_.hazards[hz].level)
+    return scores, current
+
+
 def check(dry_run: bool = False, include_nws: bool = True) -> dict:
     ts = now_iso()
-    scores = tools.all_scores(force=True)  # recompute from cache with current config
-    current = {}
-    for hid, s in scores.items():
-        current[(hid, COMPOSITE)] = (s.composite, s.level)
-        for hz in HAZARDS:
-            current[(hid, hz)] = (s.hazards[hz].score, s.hazards[hz].level)
-
+    scores, current = current_scores()
     hubs = {h.id: h for h in load_hubs()}
+    prev_at, prev = state.last_snapshot()          # durable store (Postgres in production)
     events: list[dict] = []
-    with connect() as conn:
-        prev = _last_snapshot(conn)
-        for ev in score_changes(prev, current, _delta_threshold()):
-            ev |= {"type": "score_change", "city": hubs[ev["hub_id"]].city,
-                   "drivers": top_drivers(scores[ev["hub_id"]], ev["hazard"], n=3)}
-            events.append(ev)
+    for ev in score_changes(prev, current, _delta_threshold()):
+        ev |= {"type": "score_change", "city": hubs[ev["hub_id"]].city,
+               "drivers": top_drivers(scores[ev["hub_id"]], ev["hazard"], n=3)}
+        events.append(ev)
 
-        if include_nws:
-            for h in hubs.values():
-                res = nws.active_alerts(h)
-                for a in res["alerts"]:
-                    if a.get("severity") not in ("Severe", "Extreme") or not a.get("id"):
-                        continue
-                    seen = conn.execute("SELECT 1 FROM alerts WHERE kind='nws_alert' AND hub_id=? AND payload LIKE ?",
-                                        (h.id, f'%"{a["id"]}"%')).fetchone()
-                    if not seen:
-                        events.append({"type": "nws_alert", "hub_id": h.id, "city": h.city, "nws": a})
+    if include_nws:
+        for h in hubs.values():
+            for a in nws.active_alerts(h)["alerts"]:
+                if a.get("severity") in ("Severe", "Extreme") and a.get("id") \
+                        and not state.nws_alert_seen(h.id, a["id"]):
+                    events.append({"type": "nws_alert", "hub_id": h.id, "city": h.city, "nws": a})
 
-        if not dry_run:
-            conn.executemany("INSERT INTO scores_snapshot (computed_at, hub_id, hazard, score, level) VALUES (?,?,?,?,?)",
-                             [(ts, k[0], k[1], v[0], v[1]) for k, v in current.items()])
-            for ev in events:
-                payload = {"source": "weather-risk-agent", "generated_at": ts, **ev}
-                ok, err = _deliver(payload)
-                conn.execute("INSERT INTO alerts (created_at, hub_id, kind, payload, delivered, delivery_error) VALUES (?,?,?,?,?,?)",
-                             (ts, ev["hub_id"], ev["type"], json.dumps(payload), int(ok), err))
-    return {"checked_at": ts, "baseline": not prev, "dry_run": dry_run, "events": events,
-            "score_changes": sum(e["type"] == "score_change" for e in events),
+    if not dry_run:
+        state.save_snapshot(ts, [(k[0], k[1], v[0], v[1]) for k, v in current.items()])
+        for ev in events:
+            payload = {"source": "weather-risk-agent", "generated_at": ts, **ev}
+            ok, err = _deliver(payload)
+            ref = ev["nws"]["id"] if ev["type"] == "nws_alert" else None
+            state.log_alert(ts, ev["hub_id"], ev["type"], payload, ref, ok, err)
+    return {"checked_at": ts, "previous_snapshot_at": prev_at, "baseline": not prev, "dry_run": dry_run,
+            "events": events, "score_changes": sum(e["type"] == "score_change" for e in events),
             "nws_alerts": sum(e["type"] == "nws_alert" for e in events)}
 
 

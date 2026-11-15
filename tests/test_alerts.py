@@ -4,7 +4,6 @@ import httpx
 import respx
 
 from app import alerts, tools
-from app.db import connect
 from tests.test_tools import seeded  # noqa: F401
 
 
@@ -37,12 +36,12 @@ def test_check_baseline_then_change_then_webhook(seeded, monkeypatch, tmp_path):
     assert second["score_changes"] > 0 and second["nws_alerts"] == 0   # same NWS alert not re-sent
     body = json.loads(hook.calls[-1].request.content)
     assert body["type"] == "score_change" and "drivers" in body
-    with connect() as c:
-        assert c.execute("SELECT count(*) FROM alerts WHERE delivered=1").fetchone()[0] == 1 + second["score_changes"]
+    from app import state
+    assert sum(a["delivered"] for a in state.list_alerts(200)) == 1 + second["score_changes"]
 
 
 def test_dry_run_writes_nothing(seeded, monkeypatch):  # noqa: F811
     monkeypatch.setattr(alerts.nws, "active_alerts", lambda h: {"alerts": []})
     alerts.check(dry_run=True)
-    with connect() as c:
-        assert c.execute("SELECT count(*) FROM scores_snapshot").fetchone()[0] == 0
+    from app import state
+    assert state.status()["snapshots_total_rows"] == 0

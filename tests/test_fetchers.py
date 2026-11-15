@@ -93,5 +93,4 @@ def test_seed_restores_empty_db(tmp_db):
     assert ensure_db() == "restored from seed"
     with connect() as c:
         assert c.execute("SELECT count(*) FROM weather_meta").fetchone()[0] == 14
-        assert c.execute("SELECT count(*) FROM messages").fetchone()[0] == 0
     assert ensure_db() == "existing"

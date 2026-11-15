@@ -75,7 +75,8 @@ def health() -> dict:
             "hubs_configured": len(load_hubs()), "hubs_with_weather": hubs_with_data,
             "daily_rows": days, "weather_fetched_at": fetched, "model": llm_model(),
             "refresh_running": _refresh_state["running"], "access_code_required": bool(os.getenv("ACCESS_CODE")),
-            "commit": (os.getenv("RENDER_GIT_COMMIT") or "")[:7] or None}
+            "commit": (os.getenv("RENDER_GIT_COMMIT") or "")[:7] or None,
+            "state_backend": __import__("app.state", fromlist=["x"]).backend_name()}
 
 
 @app.post("/chat", response_model=AgentAnswer, dependencies=[Depends(require_access), Depends(rate_limit)])
@@ -147,9 +148,8 @@ def alerts_check(dry_run: bool = False) -> dict:
 
 @app.get("/alerts")
 def alerts_list(limit: int = Query(20, ge=1, le=200)) -> dict:
-    with connect() as c:
-        rows = [dict(r) for r in c.execute("SELECT * FROM alerts ORDER BY id DESC LIMIT ?", (limit,))]
-    return {"alerts": rows}
+    from app import state
+    return {"alerts": state.list_alerts(limit)}
 
 
 # Local webhook receiver so the alert flow can be demoed without an external service:

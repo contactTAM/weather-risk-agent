@@ -20,7 +20,8 @@ from pydantic import ValidationError
 from functools import lru_cache
 
 from app.config import analysis_window, llm_model, load_hubs
-from app.db import connect, now_iso
+from app import state
+from app.db import now_iso
 from app.schemas import AgentAnswer, ChatMeta, HubRow, LLMAnswer, ToolCall, Uncertainty, api_json_schema
 from app.scoring import COMPOSITE, rank
 from app.tools import TOOLS, all_scores, run_tool
@@ -83,20 +84,11 @@ def _request_kwargs() -> dict:
 
 # ---------------- memory ----------------
 def load_history(session_id: str) -> list[dict]:
-    with connect() as c:
-        rows = c.execute("SELECT role, content FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
-                         (session_id, HISTORY_TURNS * 2)).fetchall()
-    msgs = [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
-    while msgs and msgs[0]["role"] != "user":
-        msgs.pop(0)
-    return msgs
+    return state.load_history(session_id, HISTORY_TURNS * 2)
 
 
 def save_turn(session_id: str, user_msg: str, answer_text: str) -> None:
-    with connect() as c:
-        c.execute("INSERT OR IGNORE INTO sessions VALUES (?,?)", (session_id, now_iso()))
-        c.executemany("INSERT INTO messages (session_id, role, content, created_at) VALUES (?,?,?,?)",
-                      [(session_id, "user", user_msg, now_iso()), (session_id, "assistant", answer_text, now_iso())])
+    state.save_turn(session_id, user_msg, answer_text, now_iso())
 
 
 # ---------------- grounding ----------------

@@ -1,4 +1,5 @@
-"""SQLite storage: raw API responses, derived daily metrics, FEMA rows, scores, chat memory, alerts.
+"""SQLite data cache: raw API responses, derived daily weather, FEMA rows (rebuildable from seed + refresh).
+Durable state (snapshots, alerts, chat memory) lives in app/state.py.
 
 Why SQLite: single file, zero ops, ships with Python, makes the demo work offline.
 """
@@ -32,22 +33,6 @@ CREATE TABLE IF NOT EXISTS fema_declarations (
     hub_id TEXT NOT NULL, disaster_number INTEGER NOT NULL, incident_type TEXT NOT NULL,
     declaration_type TEXT, declaration_date TEXT NOT NULL, designated_area TEXT,
     PRIMARY KEY (hub_id, disaster_number)
-);
-CREATE TABLE IF NOT EXISTS scores_snapshot (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, computed_at TEXT NOT NULL,
-    hub_id TEXT NOT NULL, hazard TEXT NOT NULL, score REAL NOT NULL, level TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS sessions (
-    session_id TEXT PRIMARY KEY, created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
-    role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS alerts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, hub_id TEXT NOT NULL,
-    kind TEXT NOT NULL, payload TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0,
-    delivery_error TEXT
 );
 """
 
