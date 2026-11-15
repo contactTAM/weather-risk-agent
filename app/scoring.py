@@ -67,9 +67,15 @@ class RankedHub(BaseModel):
     close_call_with_next: bool = False
 
 
-@lru_cache
 def load_config(path: str | None = None) -> dict:
-    return yaml.safe_load(Path(path or ROOT / "config" / "scoring.yaml").read_text())
+    """Scoring config; SCORING_CONFIG env var can point to an alternative file (e.g. what-if weights)."""
+    import os
+    return _load_config(str(path or os.getenv("SCORING_CONFIG") or ROOT / "config" / "scoring.yaml"))
+
+
+@lru_cache
+def _load_config(path: str) -> dict:
+    return yaml.safe_load(Path(path).read_text())
 
 
 def normalize(value: float, zero: float, full: float) -> float:

@@ -19,7 +19,7 @@ def parse(body: dict) -> list[dict]:
     out = []
     for f in body.get("features", []):
         p = f.get("properties", {})
-        out.append({k: p.get(k) for k in ("event", "severity", "urgency", "certainty",
+        out.append({k: p.get(k) for k in ("id", "event", "severity", "urgency", "certainty",
                                           "headline", "onset", "ends", "senderName")})
     return out
 

@@ -117,6 +117,23 @@ def alerts_list(limit: int = Query(20, ge=1, le=200)) -> dict:
     return {"alerts": rows}
 
 
+# Local webhook receiver so the alert flow can be demoed without an external service:
+# set ALERT_WEBHOOK_URL=http://localhost:8000/alerts/echo
+_echo: list[dict] = []
+
+
+@app.post("/alerts/echo")
+def alerts_echo(payload: dict) -> dict:
+    _echo.append(payload)
+    del _echo[:-50]
+    return {"received": True}
+
+
+@app.get("/alerts/echo")
+def alerts_echo_list() -> dict:
+    return {"received": _echo}
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(ROOT / "static" / "index.html")
