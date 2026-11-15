@@ -1,0 +1,18 @@
+# ASSUMPTION: fictional company hub network. Real US cities; city-centre coordinates
+# stand in for the hub site. county_fips = 2-digit state + 3-digit county (FEMA join key).
+# Regions follow US Census regions.
+hubs:
+  - {id: CHI, name: Chicago Hub,      city: Chicago,      state: IL, region: Midwest,   lat: 41.8781, lon: -87.6298,  county_fips: "17031", county: Cook,       timezone: America/Chicago}
+  - {id: MSP, name: Minneapolis Hub,  city: Minneapolis,  state: MN, region: Midwest,   lat: 44.9778, lon: -93.2650,  county_fips: "27053", county: Hennepin,   timezone: America/Chicago}
+  - {id: DTW, name: Detroit Hub,      city: Detroit,      state: MI, region: Midwest,   lat: 42.3314, lon: -83.0458,  county_fips: "26163", county: Wayne,      timezone: America/Detroit}
+  - {id: IND, name: Indianapolis Hub, city: Indianapolis, state: IN, region: Midwest,   lat: 39.7684, lon: -86.1581,  county_fips: "18097", county: Marion,     timezone: America/Indiana/Indianapolis}
+  - {id: MCI, name: Kansas City Hub,  city: Kansas City,  state: MO, region: Midwest,   lat: 39.0997, lon: -94.5786,  county_fips: "29095", county: Jackson,    timezone: America/Chicago}
+  - {id: CMH, name: Columbus Hub,     city: Columbus,     state: OH, region: Midwest,   lat: 39.9612, lon: -82.9988,  county_fips: "39049", county: Franklin,   timezone: America/New_York}
+  - {id: MIA, name: Miami Hub,        city: Miami,        state: FL, region: South,     lat: 25.7617, lon: -80.1918,  county_fips: "12086", county: Miami-Dade, timezone: America/New_York}
+  - {id: HOU, name: Houston Hub,      city: Houston,      state: TX, region: South,     lat: 29.7604, lon: -95.3698,  county_fips: "48201", county: Harris,     timezone: America/Chicago}
+  - {id: DFW, name: Dallas Hub,       city: Dallas,       state: TX, region: South,     lat: 32.7767, lon: -96.7970,  county_fips: "48113", county: Dallas,     timezone: America/Chicago}
+  - {id: ATL, name: Atlanta Hub,      city: Atlanta,      state: GA, region: South,     lat: 33.7490, lon: -84.3880,  county_fips: "13121", county: Fulton,     timezone: America/New_York}
+  - {id: MEM, name: Memphis Hub,      city: Memphis,      state: TN, region: South,     lat: 35.1495, lon: -90.0490,  county_fips: "47157", county: Shelby,     timezone: America/Chicago}
+  - {id: DEN, name: Denver Hub,       city: Denver,       state: CO, region: West,      lat: 39.7392, lon: -104.9903, county_fips: "08031", county: Denver,     timezone: America/Denver}
+  - {id: PHX, name: Phoenix Hub,      city: Phoenix,      state: AZ, region: West,      lat: 33.4484, lon: -112.0740, county_fips: "04013", county: Maricopa,   timezone: America/Phoenix}
+  - {id: EWR, name: Newark Hub,       city: Newark,       state: NJ, region: Northeast, lat: 40.7357, lon: -74.1724,  county_fips: "34013", county: Essex,      timezone: America/New_York}
