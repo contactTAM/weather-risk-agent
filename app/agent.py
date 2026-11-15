@@ -17,7 +17,9 @@ import time
 import anthropic
 from pydantic import ValidationError
 
-from app.config import BASELINE_YEARS, LAST_FULL_YEAR, llm_model, load_hubs
+from functools import lru_cache
+
+from app.config import analysis_window, llm_model, load_hubs
 from app.db import connect, now_iso
 from app.schemas import AgentAnswer, ChatMeta, HubRow, LLMAnswer, ToolCall, Uncertainty, api_json_schema
 from app.scoring import COMPOSITE, rank
@@ -29,7 +31,15 @@ VALID_IDS = {h.id for h in load_hubs()}
 ANSWER_SCHEMA = api_json_schema(LLMAnswer)
 TOOL_SCHEMAS = [t.schema() for t in TOOLS.values()]
 
-SYSTEM = f"""You are the Weather Risk Intelligence Agent for a logistics company's US distribution hubs.
+def system_prompt() -> str:
+    """Built from the rolling window; identical for every request within a window (prompt cache)."""
+    return _system_prompt(analysis_window().last_full_year)
+
+
+@lru_cache
+def _system_prompt(last_full_year: int) -> str:
+    win = analysis_window()
+    return f"""You are the Weather Risk Intelligence Agent for a logistics company's US distribution hubs.
 Analysts use you to decide which hubs are most exposed to weather disruption and should get resilience investment.
 
 Hub network (fictional company, real cities): {", ".join(f"{h.id}={h.city}, {h.state} ({h.region})" for h in load_hubs())}.
@@ -38,8 +48,9 @@ How you work:
 - Every number you state must come from a tool result in this conversation. Never estimate or recall weather facts.
 - Scores are deterministic, 0-100, from fixed anchors: low <33 <= moderate <66 <= high. Hazards: winter, wind
   (hurricane and high wind), flood (flood and heavy rain), heat, and composite (the Weather Disruption Risk Score).
-- "Last year" means calendar year {LAST_FULL_YEAR}. Scores use a {BASELINE_YEARS[0]}-{BASELINE_YEARS[-1]} baseline of yearly averages
-  plus FEMA county declarations 2006-2025. Say which period you used.
+- "Last year" means calendar year {win.last_full_year}. Scores use a {win.label} baseline of yearly averages
+  (the last {len(win.baseline_years)} full calendar years, rolling each January) plus FEMA county declarations
+  {win.fema_start}-{win.fema_end}. Weather data exists only for {win.label}. Say which period you used.
 - Explain "why" with the top contributing indicators and their real values (e.g. "54.6 days/yr above 35 C").
 - Distinguish relative from absolute: a hub can rank high in the network while its score is only "moderate".
   If the user's premise is off (e.g. calls a moderate score "high"), say so politely.
@@ -60,7 +71,7 @@ def _client() -> anthropic.Anthropic:
 
 
 def _request_kwargs() -> dict:
-    kw = dict(model=llm_model(), max_tokens=16000, system=SYSTEM, tools=TOOL_SCHEMAS,
+    kw = dict(model=llm_model(), max_tokens=16000, system=system_prompt(), tools=TOOL_SCHEMAS,
               output_config={"format": {"type": "json_schema", "schema": ANSWER_SCHEMA},
                              "effort": os.getenv("LLM_EFFORT", "medium")})
     if os.getenv("LLM_FALLBACKS", "default") != "off":
@@ -111,7 +122,7 @@ def _numbers_in(obj, out: set[float]) -> set[float]:
 def ungrounded_numbers(text: str, tool_results: list[dict]) -> list[str]:
     """Numbers in the answer that don't appear in any tool result or the system prompt (rounding tolerance).
     Ignores years and small integers (ranks/counts like 'top 3', '14 hubs')."""
-    known = _numbers_in(SYSTEM, set())
+    known = _numbers_in(system_prompt(), set())
     for r in tool_results:
         _numbers_in(r, known)
     known_list = sorted(known)

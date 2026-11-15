@@ -9,7 +9,7 @@ from typing import Callable, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from app.config import BASELINE_YEARS, FEMA_END_YEAR, FEMA_START_YEAR, LAST_FULL_YEAR, Hub, load_hubs
+from app.config import Hub, analysis_window, load_hubs
 from app.data import nws
 from app.db import connect
 from app.metrics import DAY_FLAGS, load_inputs, weather_stat
@@ -25,13 +25,17 @@ HAZARD_ALIASES = {
     "hot": "heat", "extreme heat": "heat",
 }
 SCALE = "0-100 (fixed anchors; low <33 <= moderate <66 <= high)"
-WEATHER_PERIOD = f"{BASELINE_YEARS[0]}-{BASELINE_YEARS[-1]} daily, yearly averages"
-SOURCES = {
-    "open_meteo": {"source": "Open-Meteo Historical Weather API (reanalysis)", "period": WEATHER_PERIOD},
-    "fema": {"source": "OpenFEMA Disaster Declarations Summaries v2 (county)", "period": f"{FEMA_START_YEAR}-{FEMA_END_YEAR}"},
-    "nws": {"source": "NWS api.weather.gov active alerts", "period": "live"},
-    "hubs": {"source": "Hub network configuration (data/hubs.yaml)", "period": "current"},
-}
+def sources() -> dict:
+    """Data sources with periods from the current rolling window."""
+    win = analysis_window()
+    return {
+        "open_meteo": {"source": "Open-Meteo Historical Weather API (reanalysis)",
+                       "period": f"{win.label} daily, yearly averages"},
+        "fema": {"source": "OpenFEMA Disaster Declarations Summaries v2 (county)",
+                 "period": f"{win.fema_start}-{win.fema_end}"},
+        "nws": {"source": "NWS api.weather.gov active alerts", "period": "live"},
+        "hubs": {"source": "Hub network configuration (data/hubs.yaml)", "period": "current"},
+    }
 
 
 def _norm_hazard(v):
@@ -133,14 +137,16 @@ class WeatherStatArgs(BaseModel):
     metric: Literal[tuple(DAY_FLAGS)] = Field(  # type: ignore[valid-type]
         ..., description="snowfall_any_days (>=0.1 cm), snow_days_1cm, heavy_snow_days (>=10 cm), "
                          "freeze_days (min<=0C), gust60_days, gust90_days, rain25_days, rain50_days, heat_days (max>=35C)")
-    year: int = Field(LAST_FULL_YEAR, description=f"Calendar year {BASELINE_YEARS[0]}-{BASELINE_YEARS[-1]}. 'Last year' = {LAST_FULL_YEAR}.")
+    # Static description keeps the tool schema stable (prompt cache); the window is in the system prompt.
+    year: int = Field(default_factory=lambda: analysis_window().last_full_year,
+                      description="Calendar year inside the analysis window. 'Last year' = the last full calendar year.")
 
 
 # ---------- tool functions ----------
 def list_hubs(args: ListHubsArgs) -> dict:
     hubs = [_hub_brief(h) for h in load_hubs() if not args.region or h.region == args.region]
     return {"hubs": hubs, "count": len(hubs), "assumption": "Fictional hub network; city-centre coordinates stand in for hub sites.",
-            "data_used": [SOURCES["hubs"]]}
+            "data_used": [sources()["hubs"]]}
 
 
 def rank_hubs(args: RankHubsArgs) -> dict:
@@ -162,7 +168,7 @@ def rank_hubs(args: RankHubsArgs) -> dict:
                        {k: v["weight"] for k, v in cfg["hazards"][args.hazard]["indicators"].items()},
             "close_call_note": "close_call_with_next=true means the next hub is within "
                                f"{cfg['close_call_points']} points: treat their order as uncertain.",
-            "data_used": [SOURCES["open_meteo"], SOURCES["fema"]]}
+            "data_used": [sources()["open_meteo"], sources()["fema"]]}
 
 
 def compare_hubs(args: CompareHubsArgs) -> dict:
@@ -186,7 +192,7 @@ def compare_hubs(args: CompareHubsArgs) -> dict:
                                           for c in hs.indicators}}
         out.append(row)
     return {"comparison": out, "not_found": missing, "hazards": hazards, "scale": SCALE,
-            "data_used": [SOURCES["open_meteo"], SOURCES["fema"]]}
+            "data_used": [sources()["open_meteo"], sources()["fema"]]}
 
 
 def get_hub_risk_breakdown(args: HubArgs) -> dict:
@@ -203,15 +209,16 @@ def get_hub_risk_breakdown(args: HubArgs) -> dict:
             "top_drivers": top_drivers(s, COMPOSITE, n=4),
             "hazards": {hz: hs.model_dump() for hz, hs in s.hazards.items()},
             "data_quality": s.data_quality.model_dump(),
-            "data_used": [SOURCES["open_meteo"], SOURCES["fema"]]}
+            "data_used": [sources()["open_meteo"], sources()["fema"]]}
 
 
 def get_weather_stat(args: WeatherStatArgs) -> dict:
     h = resolve_hub(args.hub_id)
     if not h:
         return _not_found(args.hub_id)
-    if args.year not in BASELINE_YEARS:
-        return {"error": "year_not_cached", "message": f"Only {BASELINE_YEARS[0]}-{BASELINE_YEARS[-1]} are cached."}
+    win = analysis_window()
+    if args.year not in win.baseline_years:
+        return {"error": "year_not_cached", "message": f"Only {win.label} are cached (rolling {len(win.baseline_years)}-year window)."}
     with connect() as conn:
         daily = load_inputs(conn, h).daily
     stat = weather_stat(daily, args.metric, args.year)
@@ -221,7 +228,7 @@ def get_weather_stat(args: WeatherStatArgs) -> dict:
         related[other] = weather_stat(daily, other, args.year)
     return {"hub": _hub_brief(h), "stat": stat, "related": related,
             "definitions": METRIC_DEFINITIONS,
-            "data_used": [{"source": SOURCES["open_meteo"]["source"], "period": f"{args.year} (calendar year, local time)"}],
+            "data_used": [{"source": sources()["open_meteo"]["source"], "period": f"{args.year} (calendar year, local time)"}],
             "note": "Grid-cell reanalysis value near the city centre, not a station record."}
 
 
@@ -230,7 +237,7 @@ def get_active_alerts(args: HubArgs) -> dict:
     if not h:
         return _not_found(args.hub_id)
     res = nws.active_alerts(h)
-    return {"hub": _hub_brief(h), **res, "data_used": [SOURCES["nws"]],
+    return {"hub": _hub_brief(h), **res, "data_used": [sources()["nws"]],
             "note": "Live alerts are current conditions; they do not change the historical risk score."}
 
 

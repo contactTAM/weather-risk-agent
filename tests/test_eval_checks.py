@@ -39,3 +39,14 @@ def test_new_check_types(monkeypatch):
              meta={"tools_called": [], "grounding_warnings": ["number 99 not found in tool results"]})
     assert run_checks(ok, inj) == []
     assert run_checks(ans(answer="Miami's composite is 22.7 (low)."), inj) == []
+
+
+def test_eval_years_follow_the_window(monkeypatch):
+    import yaml
+    from evals.run import ROOT, resolve_years
+    monkeypatch.setenv("ANALYSIS_END_YEAR", "2026")
+    cases = {c["id"]: c for c in resolve_years(yaml.safe_load((ROOT / "cases.yaml").read_text())["cases"])}
+    assert cases["denver_snow_pct"]["checks"]["numbers"][0]["stat"]["year"] == 2026
+    assert cases["phoenix_heat_stat"]["turns"][0].startswith("How many days in 2025")
+    assert "2022" in cases["out_of_range_year"]["checks"]["mentions_any"]
+    assert "{Y" not in str(cases)

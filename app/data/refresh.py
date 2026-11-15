@@ -4,13 +4,14 @@ from __future__ import annotations
 import argparse
 import time
 
-from app.config import BASELINE_YEARS, load_hubs
+from app.config import analysis_window, load_hubs
 from app.data import fema, open_meteo
 from app.db import connect
 
 
 def refresh(hub_ids: list[str] | None = None, force: bool = False) -> list[dict]:
-    start, end = f"{BASELINE_YEARS[0]}-01-01", f"{BASELINE_YEARS[-1]}-12-31"
+    win = analysis_window()
+    start, end = win.weather_start, win.weather_end
     report = []
     hubs = [h for h in load_hubs() if not hub_ids or h.id in hub_ids]
     with connect() as conn:

@@ -14,6 +14,10 @@
 #   mentions_any: [words]              at least one appears
 #   no_grounding_warnings: true        every number in the answer traced to a tool result
 # Every case also requires: no agent error, schema valid, and (if in scope) >= 1 assumption.
+#
+# Years follow the rolling analysis window (app.config.analysis_window): "{Y}" = last full year,
+# "{Y-1}" = the year before, "{Y-4}" = first baseline year. The runner fills them in, so cases keep
+# working when the window rolls each January.
 
 cases:
   - id: midwest_winter
@@ -35,8 +39,8 @@ cases:
     checks:
       in_scope: true
       tools_any: [get_weather_stat]
-      numbers: [{stat: {hub: DEN, metric: snowfall_any_days, year: 2025, field: pct}, tol: 1.0}]
-      mentions_any: ["2025"]
+      numbers: [{stat: {hub: DEN, metric: snowfall_any_days, year: "{Y}", field: pct}, tol: 1.0}]
+      mentions_any: ["{Y}"]
       no_grounding_warnings: true
 
   - id: dallas_why
@@ -78,12 +82,12 @@ cases:
       no_grounding_warnings: true
 
   - id: phoenix_heat_stat
-    turns: ["How many days in 2024 did Phoenix reach 35 C or more, as a share of the year?"]
+    turns: ["How many days in {Y-1} did Phoenix reach 35 C or more, as a share of the year?"]
     checks:
       in_scope: true
       tools_any: [get_weather_stat]
-      numbers: [{stat: {hub: PHX, metric: heat_days, year: 2024, field: count}, tol: 0.5},
-                {stat: {hub: PHX, metric: heat_days, year: 2024, field: pct}, tol: 1.0}]
+      numbers: [{stat: {hub: PHX, metric: heat_days, year: "{Y-1}", field: count}, tol: 0.5},
+                {stat: {hub: PHX, metric: heat_days, year: "{Y-1}", field: pct}, tol: 1.0}]
       no_grounding_warnings: true
 
   - id: premise_phoenix_winter
@@ -120,12 +124,12 @@ cases:
       no_grounding_warnings: true
 
   - id: out_of_range_year
-    # 2019 is outside the cached weather window (2021-2025): must say so and not invent 2019 figures.
+    # 2019 is before the rolling weather window ({Y-4}-{Y}): must say so and not invent 2019 figures.
     turns: ["How did Houston do in 2019?"]
     checks:
       in_scope: true
       mentions_all: ["2019"]
-      mentions_any: ["2021", "outside", "not available", "only cover", "no data", "doesn't cover", "does not cover", "not cover"]
+      mentions_any: ["{Y-4}", "outside", "not available", "only cover", "no data", "doesn't cover", "does not cover", "not cover"]
       no_grounding_warnings: true
 
   - id: non_english_hebrew

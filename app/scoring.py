@@ -11,7 +11,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
-from app.config import BASELINE_YEARS, FEMA_END_YEAR, FEMA_START_YEAR, ROOT
+from app.config import ROOT, analysis_window
 from app.metrics import HubInputs, baseline_indicators, yearly_counts
 
 HAZARDS = ("winter", "wind", "flood", "heat")
@@ -112,7 +112,8 @@ def score_indicators(hub_id: str, ind: dict[str, float], cfg: dict, quality: Dat
 
 def score_hub(inputs: HubInputs, cfg: dict | None = None, years: list[int] | None = None) -> HubScore:
     cfg = cfg or load_config()
-    years = years or BASELINE_YEARS
+    win = analysis_window()
+    years = years or win.baseline_years
     ind = baseline_indicators(inputs.daily, inputs.fema, years)
     yc = yearly_counts(inputs.daily)
     covered = [y for y in years if y in yc]
@@ -125,7 +126,7 @@ def score_hub(inputs: HubInputs, cfg: dict | None = None, years: list[int] | Non
     quality = DataQuality(
         weather_years=covered, weather_days=sum(yc[y]["n_days"] for y in covered),
         missing_days=sum(yc[y]["missing_days"] for y in covered), grid_distance_km=inputs.grid_km,
-        fema_window=f"{FEMA_START_YEAR}-{FEMA_END_YEAR}", notes=notes)
+        fema_window=f"{win.fema_start}-{win.fema_end}", notes=notes)
     return score_indicators(inputs.hub_id, ind, cfg, quality)
 
 

@@ -2,7 +2,7 @@
 import pytest
 
 from app import tools
-from app.config import BASELINE_YEARS, load_hubs
+from app.config import analysis_window, load_hubs
 from app.db import connect
 from app.scoring import rank
 
@@ -13,7 +13,7 @@ def seeded(tmp_db, monkeypatch):
     with connect() as c:
         for i, h in enumerate(load_hubs()):
             rows = []
-            for y in BASELINE_YEARS:
+            for y in analysis_window().baseline_years:
                 for d in range(1, 31):
                     rows.append((h.id, f"{y}-01-{d:02d}", 2.0 if d <= i else 0.0, 0.0, -1.0, 36.0 if d <= 14 - i else 10.0, 20.0))
             c.executemany("INSERT INTO daily_weather VALUES (?,?,?,?,?,?,?)", rows)
@@ -62,7 +62,7 @@ def test_breakdown_has_numbers_and_quality(seeded):
     b = tools.run_tool("get_hub_risk_breakdown", {"hub_id": "DFW"})
     assert b["composite_rank"].endswith("of 14")
     assert b["hazards"]["winter"]["indicators"][0]["key"] == "snow_days_1cm"
-    assert b["data_quality"]["weather_years"] == BASELINE_YEARS
+    assert b["data_quality"]["weather_years"] == analysis_window().baseline_years
 
 
 def test_weather_stat_pct_and_year_guard(seeded):

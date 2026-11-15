@@ -47,6 +47,22 @@ def expected_order(hazard: str, k: int, region: str | None = None) -> list[str]:
     return [r["hub_id"] for r in out["ranking"]][:k]
 
 
+def resolve_years(node, win=None, key=None):
+    """Fill "{Y}", "{Y-1}", ... with years from the rolling window. `year:` fields become ints;
+    everything else stays text (e.g. words in mentions_any)."""
+    from app.config import analysis_window
+    win = win or analysis_window()
+    tok = re.compile(r"\{Y(?:-(\d+))?\}")
+    if isinstance(node, dict):
+        return {k: resolve_years(v, win, k) for k, v in node.items()}
+    if isinstance(node, list):
+        return [resolve_years(v, win, key) for v in node]
+    if isinstance(node, str):
+        out = tok.sub(lambda m: str(win.last_full_year - int(m.group(1) or 0)), node)
+        return int(out) if key == "year" else out
+    return node
+
+
 # ---------- checks ----------
 def run_checks(ans: dict, checks: dict) -> list[str]:
     """Returns a list of failure messages (empty = pass)."""
@@ -202,7 +218,7 @@ def main() -> int:
 
     from app.data.seed import ensure_db
     ensure_db()
-    cases = yaml.safe_load((ROOT / "cases.yaml").read_text())["cases"]
+    cases = resolve_years(yaml.safe_load((ROOT / "cases.yaml").read_text())["cases"])
     if args.case:
         cases = [c for c in cases if c["id"] in args.case]
     with ThreadPoolExecutor(args.workers) as ex:

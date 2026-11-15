@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from app.config import FEMA_END_YEAR, FEMA_START_YEAR, Hub
+from app.config import Hub, analysis_window
 from app.data.http import get_json
 from app.db import save_raw
 
@@ -26,9 +26,10 @@ HAZARD_GROUPS: dict[str, set[str]] = {
 
 def fetch(hub: Hub) -> dict:
     state, county = hub.county_fips[:2], hub.county_fips[2:]
+    win = analysis_window()
     flt = (f"fipsStateCode eq '{state}' and fipsCountyCode eq '{county}' "
-           f"and declarationDate ge '{FEMA_START_YEAR}-01-01T00:00:00.000Z' "
-           f"and declarationDate le '{FEMA_END_YEAR}-12-31T23:59:59.999Z'")
+           f"and declarationDate ge '{win.fema_start}-01-01T00:00:00.000Z' "
+           f"and declarationDate le '{win.fema_end}-12-31T23:59:59.999Z'")
     return get_json(URL, params={"$filter": flt, "$select": SELECT, "$top": 1000})
 
 
