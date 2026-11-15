@@ -113,6 +113,7 @@ def ungrounded_numbers(text: str, tool_results: list[dict]) -> list[str]:
     known = _numbers_in(SYSTEM, set())
     for r in tool_results:
         _numbers_in(r, known)
+    known_list = sorted(known)
     bad = []
     for s in _NUM.findall(text):
         v = float(s)
@@ -120,8 +121,12 @@ def ungrounded_numbers(text: str, tool_results: list[dict]) -> list[str]:
             continue
         tol = 0.051 if "." in s else 0.51
         derived = {k * 100 for k in known} | {k / 100 for k in known}
-        if not any(abs(v - k) <= tol for k in known | derived):
-            bad.append(s)
+        if any(abs(v - k) <= tol for k in known | derived):
+            continue
+        # arithmetic on grounded numbers (e.g. "leads by 54.5 points" = 100.0 - 45.5) is grounded too
+        if any(abs(abs(a - b) - v) <= tol for i, a in enumerate(known_list) for b in known_list[i + 1:]):
+            continue
+        bad.append(s)
     return bad
 
 

@@ -115,3 +115,8 @@ def test_api_schema_is_strict():
     assert s["additionalProperties"] is False and set(s["required"]) == set(LLMAnswer.model_fields)
     for d in s.get("$defs", {}).values():
         assert d["additionalProperties"] is False
+
+
+def test_grounding_accepts_differences_of_tool_numbers():
+    assert agent.ungrounded_numbers("leads by 54.5 points", [{"a": 100.0, "b": 45.5}]) == []
+    assert agent.ungrounded_numbers("leads by 61.3 points", [{"a": 100.0, "b": 45.5}]) == ["61.3"]
