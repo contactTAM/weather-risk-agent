@@ -24,6 +24,7 @@ HAZARD_ALIASES = {
     "rain": "flood", "flooding": "flood", "precipitation": "flood",
     "hot": "heat", "extreme heat": "heat",
 }
+SCALE = "0-100 (fixed anchors; low <33 <= moderate <66 <= high)"
 WEATHER_PERIOD = f"{BASELINE_YEARS[0]}-{BASELINE_YEARS[-1]} daily, yearly averages"
 SOURCES = {
     "open_meteo": {"source": "Open-Meteo Historical Weather API (reanalysis)", "period": WEATHER_PERIOD},
@@ -139,7 +140,7 @@ def rank_hubs(args: RankHubsArgs) -> dict:
         rows.append(r.model_dump() | {"city": resolve_hub(r.hub_id).city,
                                       "top_drivers": top_drivers(s, args.hazard, n=2)})
     return {"hazard": args.hazard, "region": args.region or "all", "ranking": rows,
-            "scale": "0-100 (fixed anchors; low<33<=moderate<66<=high)",
+            "scale": SCALE,
             "weights": cfg["composite_weights"] if args.hazard == COMPOSITE else
                        {k: v["weight"] for k, v in cfg["hazards"][args.hazard]["indicators"].items()},
             "close_call_note": "close_call_with_next=true means the next hub is within "
@@ -164,10 +165,10 @@ def compare_hubs(args: CompareHubsArgs) -> dict:
             else:
                 hs = s.hazards[hz]
                 row[hz] = {"score": hs.score, "level": hs.level,
-                           "indicators": {c.key: {"value": c.value, "unit": c.unit, "points": c.contribution}
+                           "indicators": {c.key: {"label": c.label, "value": c.value, "unit": c.unit, "points": c.contribution}
                                           for c in hs.indicators}}
         out.append(row)
-    return {"comparison": out, "not_found": missing, "hazards": hazards,
+    return {"comparison": out, "not_found": missing, "hazards": hazards, "scale": SCALE,
             "data_used": [SOURCES["open_meteo"], SOURCES["fema"]]}
 
 
@@ -178,7 +179,7 @@ def get_hub_risk_breakdown(args: HubArgs) -> dict:
     scores = all_scores()
     s = scores[h.id]
     r = next(x for x in rank(list(scores.values())) if x.hub_id == h.id)
-    return {"hub": _hub_brief(h), "composite": s.composite, "level": s.level,
+    return {"hub": _hub_brief(h), "composite": s.composite, "level": s.level, "scale": SCALE,
             "composite_rank": f"{r.rank} of {len(scores)}",
             "composite_contributions_points": s.composite_contributions,
             "composite_weights": load_config()["composite_weights"],
