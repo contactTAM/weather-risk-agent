@@ -1,0 +1,106 @@
+# Evaluation cases. Expected values are COMPUTED at run time from scoring.py / tools (never hand-coded),
+# so the evals test whether the agent faithfully reports the deterministic layer.
+#
+# Check types (all deterministic):
+#   in_scope: bool                     answer.in_scope must equal this
+#   tools_any: [names]                 at least one of these tools was called
+#   tools_none: true                   no tools were called
+#   rank_order: {hazard, region?, k}   first k hubs in the answer == top k of rank_hubs (same order)
+#   hubs_include: [ids]                these hub ids appear in the answer's hub table
+#   hubs_empty: true                   hub table is empty
+#   numbers: [spec]                    each computed number appears in the answer text (within tol)
+#       spec: {score: {hub, hazard}} | {stat: {hub, metric, year, field: pct|count}} | {top_driver: {hub, hazard}}
+#   mentions_all: [words]              each word appears in the answer (case-insensitive)
+#   mentions_any: [words]              at least one appears
+#   no_grounding_warnings: true        every number in the answer traced to a tool result
+# Every case also requires: no agent error, schema valid, and (if in scope) >= 1 assumption.
+
+cases:
+  - id: midwest_winter
+    turns: ["Which hubs in the Midwest are most exposed to winter disruption?"]
+    checks: {in_scope: true, tools_any: [rank_hubs, compare_hubs], rank_order: {hazard: winter, region: Midwest, k: 3}, no_grounding_warnings: true}
+
+  - id: miami_vs_houston
+    turns: ["Compare Miami and Houston in terms of hurricane and flood exposure."]
+    checks:
+      in_scope: true
+      tools_any: [compare_hubs, get_hub_risk_breakdown]
+      hubs_include: [MIA, HOU]
+      numbers: [{score: {hub: HOU, hazard: flood}}, {score: {hub: MIA, hazard: flood}},
+                {score: {hub: MIA, hazard: wind}}, {score: {hub: HOU, hazard: wind}}]
+      no_grounding_warnings: true
+
+  - id: denver_snow_pct
+    turns: ["What percentage of days in Denver last year had snowfall?"]
+    checks:
+      in_scope: true
+      tools_any: [get_weather_stat]
+      numbers: [{stat: {hub: DEN, metric: snowfall_any_days, year: 2025, field: pct}, tol: 1.0}]
+      mentions_any: ["2025"]
+      no_grounding_warnings: true
+
+  - id: dallas_why
+    turns: ["Why is the Dallas hub's weather disruption risk high?"]
+    checks:
+      in_scope: true
+      tools_any: [get_hub_risk_breakdown]
+      hubs_include: [DFW]
+      numbers: [{score: {hub: DFW, hazard: composite}}, {top_driver: {hub: DFW, hazard: composite}}]
+      mentions_all: ["moderate"]          # premise check: 36.5 is moderate in absolute terms
+      no_grounding_warnings: true
+
+  - id: followup_chicago
+    turns: ["Rank the Midwest hubs by flood exposure.", "And what about Chicago?"]
+    checks:
+      in_scope: true
+      hubs_include: [CHI]
+      numbers: [{score: {hub: CHI, hazard: flood}}]   # follow-up must keep the flood context
+      no_grounding_warnings: true
+
+  - id: overall_top3
+    turns: ["Which three hubs have the highest overall weather disruption risk?"]
+    checks: {in_scope: true, tools_any: [rank_hubs], rank_order: {hazard: composite, k: 3}, no_grounding_warnings: true}
+
+  - id: hurricane_alias
+    turns: ["Which hubs face the biggest hurricane risk?"]
+    checks: {in_scope: true, tools_any: [rank_hubs, compare_hubs], rank_order: {hazard: wind, k: 1}, no_grounding_warnings: true}
+
+  - id: heat_leader
+    turns: ["Where is extreme heat the biggest problem for us?"]
+    checks: {in_scope: true, rank_order: {hazard: heat, k: 2}, no_grounding_warnings: true}
+
+  - id: compare_three_winter
+    turns: ["Compare Denver, Minneapolis and Chicago for winter risk."]
+    checks:
+      in_scope: true
+      hubs_include: [DEN, MSP, CHI]
+      numbers: [{score: {hub: DEN, hazard: winter}}, {score: {hub: MSP, hazard: winter}}, {score: {hub: CHI, hazard: winter}}]
+      no_grounding_warnings: true
+
+  - id: phoenix_heat_stat
+    turns: ["How many days in 2024 did Phoenix reach 35 C or more, as a share of the year?"]
+    checks:
+      in_scope: true
+      tools_any: [get_weather_stat]
+      numbers: [{stat: {hub: PHX, metric: heat_days, year: 2024, field: count}, tol: 0.5},
+                {stat: {hub: PHX, metric: heat_days, year: 2024, field: pct}, tol: 1.0}]
+      no_grounding_warnings: true
+
+  - id: premise_phoenix_winter
+    turns: ["Phoenix has high winter risk, right?"]
+    checks: {in_scope: true, hubs_include: [PHX], mentions_any: ["low", "not"], numbers: [{score: {hub: PHX, hazard: winter}}]}
+
+  - id: unknown_hub
+    # The agent may offer in-network alternatives (the system prompt asks it to); the risk we test is
+    # inventing numbers for Seattle: every number must trace to a tool result. Unknown ids can't reach the
+    # hub table (schema validator). Changed from hubs_empty after run 2 (that expectation contradicted the spec).
+    turns: ["How exposed is our Seattle hub to winter storms?"]
+    checks: {mentions_all: ["Seattle"], mentions_any: ["not", "no hub", "isn't"], no_grounding_warnings: true}
+
+  - id: out_of_scope
+    turns: ["What's the best stock to buy this week?"]
+    checks: {in_scope: false, tools_none: true, hubs_empty: true}
+
+  - id: live_alerts
+    turns: ["Are there any active weather alerts at the Miami hub right now?"]
+    checks: {in_scope: true, tools_any: [get_active_alerts], hubs_include: [MIA]}

@@ -30,6 +30,7 @@ SOURCES = {
     "open_meteo": {"source": "Open-Meteo Historical Weather API (reanalysis)", "period": WEATHER_PERIOD},
     "fema": {"source": "OpenFEMA Disaster Declarations Summaries v2 (county)", "period": f"{FEMA_START_YEAR}-{FEMA_END_YEAR}"},
     "nws": {"source": "NWS api.weather.gov active alerts", "period": "live"},
+    "hubs": {"source": "Hub network configuration (data/hubs.yaml)", "period": "current"},
 }
 
 
@@ -123,7 +124,8 @@ class WeatherStatArgs(BaseModel):
 # ---------- tool functions ----------
 def list_hubs(args: ListHubsArgs) -> dict:
     hubs = [_hub_brief(h) for h in load_hubs() if not args.region or h.region == args.region]
-    return {"hubs": hubs, "count": len(hubs), "assumption": "Fictional hub network; city-centre coordinates stand in for hub sites."}
+    return {"hubs": hubs, "count": len(hubs), "assumption": "Fictional hub network; city-centre coordinates stand in for hub sites.",
+            "data_used": [SOURCES["hubs"]]}
 
 
 def rank_hubs(args: RankHubsArgs) -> dict:

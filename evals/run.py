@@ -1,0 +1,155 @@
+"""Run the evaluation set.  Usage:
+    python -m evals.run                 # all cases, in-process agent
+    python -m evals.run --case dallas_why --case denver_snow_pct
+    python -m evals.run --api http://localhost:8000   # same cases against a running API
+Prints a pass/fail table, writes evals/results/<timestamp>.json, exits 1 if any case fails.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from pathlib import Path
+
+import httpx
+import yaml
+
+from app import agent, tools
+from app.scoring import top_drivers
+
+ROOT = Path(__file__).resolve().parent
+NUM = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?")
+
+
+# ---------- expected values, computed from the deterministic layer ----------
+def expected_number(spec: dict) -> float:
+    if "score" in spec:
+        s = tools.all_scores()[spec["score"]["hub"]]
+        return s.score_for(spec["score"]["hazard"])
+    if "stat" in spec:
+        st = spec["stat"]
+        out = tools.run_tool("get_weather_stat", {"hub_id": st["hub"], "metric": st["metric"], "year": st["year"]})
+        return float(out["stat"][st.get("field", "pct")])
+    if "top_driver" in spec:
+        d = spec["top_driver"]
+        return float(top_drivers(tools.all_scores()[d["hub"]], d["hazard"], n=1)[0]["value"])
+    raise ValueError(spec)
+
+
+def expected_order(hazard: str, k: int, region: str | None = None) -> list[str]:
+    out = tools.run_tool("rank_hubs", {"hazard": hazard, "region": region})
+    return [r["hub_id"] for r in out["ranking"]][:k]
+
+
+# ---------- checks ----------
+def run_checks(ans: dict, checks: dict) -> list[str]:
+    """Returns a list of failure messages (empty = pass)."""
+    fails = []
+    meta = ans.get("meta", {})
+    text = ans.get("answer", "")
+    low = text.lower()
+    hub_ids = [h["hub_id"] for h in ans.get("hubs", [])]
+    called = [t["name"] for t in meta.get("tools_called", [])]
+
+    if meta.get("error"):
+        return [f"agent error: {meta['error']}"]
+    if ans.get("in_scope") and not ans.get("assumptions"):
+        fails.append("no assumptions stated")
+    if "in_scope" in checks and ans.get("in_scope") != checks["in_scope"]:
+        fails.append(f"in_scope={ans.get('in_scope')}, expected {checks['in_scope']}")
+    if "tools_any" in checks and not set(called) & set(checks["tools_any"]):
+        fails.append(f"tools called {called}, expected one of {checks['tools_any']}")
+    if checks.get("tools_none") and called:
+        fails.append(f"expected no tools, called {called}")
+    if "rank_order" in checks:
+        ro = checks["rank_order"]
+        exp = expected_order(ro["hazard"], ro["k"], ro.get("region"))
+        if hub_ids[: ro["k"]] != exp:
+            fails.append(f"order {hub_ids[:ro['k']]} != expected {exp} ({ro['hazard']})")
+    for h in checks.get("hubs_include", []):
+        if h not in hub_ids:
+            fails.append(f"hub {h} missing from table {hub_ids}")
+    if checks.get("hubs_empty") and hub_ids:
+        fails.append(f"expected no hubs, got {hub_ids}")
+    found = [float(x) for x in NUM.findall(text)]
+    for spec in checks.get("numbers", []):
+        exp = expected_number(spec)
+        tol = spec.get("tol", 0.15)
+        if not any(abs(f - exp) <= tol for f in found):
+            fails.append(f"expected number {exp} (±{tol}) not in answer [{json.dumps({k: v for k, v in spec.items() if k != 'tol'})}]")
+    for w in checks.get("mentions_all", []):
+        if w.lower() not in low:
+            fails.append(f"answer does not mention '{w}'")
+    if "mentions_any" in checks and not any(w.lower() in low for w in checks["mentions_any"]):
+        fails.append(f"answer mentions none of {checks['mentions_any']}")
+    if checks.get("no_grounding_warnings") and meta.get("grounding_warnings"):
+        fails.append(f"grounding warnings: {meta['grounding_warnings']}")
+    return fails
+
+
+# ---------- execution ----------
+def ask(question: str, session: str, api: str | None) -> dict:
+    if api:
+        r = httpx.post(f"{api.rstrip('/')}/chat", json={"session_id": session, "message": question}, timeout=180)
+        r.raise_for_status()
+        return r.json()
+    return agent.chat(session, question).model_dump()
+
+
+def run_case(case: dict, api: str | None) -> dict:
+    session = f"eval-{case['id']}-{uuid.uuid4().hex[:6]}"
+    ans = {}
+    try:
+        for q in case["turns"]:
+            ans = ask(q, session, api)
+        fails = run_checks(ans, case.get("checks", {}))
+    except Exception as e:  # a crash is a failure, not an abort
+        fails = [f"exception: {type(e).__name__}: {e}"]
+    meta = ans.get("meta", {})
+    return {"id": case["id"], "turns": case["turns"], "pass": not fails, "failures": fails,
+            "answer": ans.get("answer"), "hubs": [h["hub_id"] for h in ans.get("hubs", [])],
+            "tools": [t["name"] for t in meta.get("tools_called", [])],
+            "retries": meta.get("validation_retries", 0), "validation_errors": meta.get("validation_errors", []),
+            "latency_ms": meta.get("latency_ms"),
+            "grounding_warnings": meta.get("grounding_warnings", [])}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--case", action="append", help="run only these case ids")
+    ap.add_argument("--api", help="base URL of a running API (default: in-process agent)")
+    ap.add_argument("--workers", type=int, default=4)
+    args = ap.parse_args()
+
+    cases = yaml.safe_load((ROOT / "cases.yaml").read_text())["cases"]
+    if args.case:
+        cases = [c for c in cases if c["id"] in args.case]
+    with ThreadPoolExecutor(args.workers) as ex:
+        results = list(ex.map(lambda c: run_case(c, args.api), cases))
+
+    w = max(len(r["id"]) for r in results)
+    print(f"\n{'case':<{w}}  result  tools                                   latency  retries")
+    print("-" * (w + 70))
+    for r in results:
+        tl = ",".join(r["tools"]) or "-"
+        print(f"{r['id']:<{w}}  {'PASS' if r['pass'] else 'FAIL':<6}  {tl[:38]:<38}  {(r['latency_ms'] or 0)/1000:6.1f}s  {r['retries']}")
+        for f in r["failures"]:
+            print(f"{'':<{w}}    - {f}")
+    passed = sum(r["pass"] for r in results)
+    print("-" * (w + 70))
+    print(f"{passed}/{len(results)} passed")
+
+    out = ROOT / "results" / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+    out.write_text(json.dumps({"passed": passed, "total": len(results), "api": args.api,
+                               "model": agent.llm_model() if not args.api else None,
+                               "results": results}, indent=2))
+    print(f"saved {out.relative_to(ROOT.parent)}")
+    return 0 if passed == len(results) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
